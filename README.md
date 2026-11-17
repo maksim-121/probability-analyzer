@@ -117,7 +117,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, сравнение вариантов, ссылка, особые расчёты | 42 проверки |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, сравнение вариантов, ссылка, особые расчёты | 41 проверка |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -136,7 +136,7 @@ python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest   # страница: 42 проверки
+python tests/run_selftest.py uitest   # страница: 41 проверка
 ```
 
 ## Структура
@@ -180,5 +180,5 @@ docs/                 математика, архитектура, скринш
 - Example from the task: will a meeting start on time given transport delays, lunch overruns and a busy meeting room? 54 out of 100, exact answer 0.8 · 0.9 · 0.75 = 54 %.
 - Common cause: factors can depend on a yes/no factor ("rain → transport and lunch delays"); the app compares the result with a naive model that ignores the link.
 - Results: plain-language answer, probability with a 95 % CI, exact enumeration when all factors are discrete, histogram, what helps most.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 42 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 41 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/
