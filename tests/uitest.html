@@ -3,7 +3,7 @@
 <body style="margin:0">
 <!-- Проверка страницы «как пользователь»: грузит index.html во фрейме, меняет поля, смотрит результат.
      Запуск: python tests/run_selftest.py uitest   (нужен флаг --allow-file-access-from-files, он там есть) -->
-<iframe id="f" src="../index.html#expert" style="width:1300px;height:900px;border:0"></iframe>
+<iframe id="f" src="../index.html#simple=new" style="width:1300px;height:900px;border:0"></iframe>
 <script>
 'use strict';
 const out = [];
@@ -17,249 +17,6 @@ async function until(fn, ms = 20000) {
 (async () => {
   const f = document.getElementById('f');
   await new Promise(r => f.addEventListener('load', r, { once: true }));
-  const w = f.contentWindow, d = f.contentDocument, $ = s => d.querySelector(s);
-  try { w.localStorage.clear(); } catch (e) {}
-  const type = (el, v, change = true) => {
-    el.dispatchEvent(new w.FocusEvent('focusin', { bubbles: true }));
-    el.value = v;
-    el.dispatchEvent(new w.Event('input', { bubbles: true }));
-    if (change) el.dispatchEvent(new w.Event('change', { bubbles: true }));
-  };
-  const hero = () => ($('.hero-value') || {}).textContent;
-  const done = () => $('#run').textContent.includes('Рассчитать') && !$('#run').disabled;
-
-  // 1. шаблон «Совещание» считается при открытии
-  check('Совещание считается при открытии', await until(() => hero() && done()), hero());
-  check('Совещание: 53,94 % при сиде 20261117', hero() === '53,94 %', hero());
-  check('Совещание: точный перебор невозможен (есть непрерывный фактор)', /невозможен/.test($('.exact').textContent));
-  check('Нарисованы 3 графика', d.querySelectorAll('.chart svg').length === 3);
-  check('Торнадо: первый фактор — «Занята»', /Занята/.test($('#ch-tornado .lbl').textContent), $('#ch-tornado .lbl').textContent);
-
-  // 2. ошибка в формуле видна и блокирует запуск
-  const ev = $('[data-path="event.formula"]');
-  type(ev, 'Задерджка <= 5');
-  check('Опечатка: показана понятная ошибка', !$('#error').hidden && /неизвестное имя «Задерджка»/.test($('#error').textContent), $('#error').textContent);
-  check('Опечатка: кнопка расчёта заблокирована', $('#run').disabled);
-  check('Результат помечен устаревшим', !$('#stale').hidden);
-  type(ev, 'Задержка <= 10');
-  check('Исправили формулу — ошибка исчезла', $('#error').hidden);
-  $('#run').click();
-  await until(() => done() && hero() !== '53,94 %');
-  // P(задержка <= 10) = 1 − 0.95 · 0.875 = 83,125 %
-  const p10 = parseFloat(hero().replace(',', '.'));
-  check('Задержка ≤ 10: около 83,1 % (точно 83,125 %)', Math.abs(p10 - 83.125) < 0.15, hero());
-
-  // 3. переименование фактора обновляет формулы
-  type($('[data-path="factors.0.name"]'), 'Иван_П');
-  check('Переименование: формула итога обновилась', $('[data-path="result.formula"]').value === 'max(Иван_П, Мария, Переговорка)', $('[data-path="result.formula"]').value);
-  check('Переименование: ошибок нет', $('#error').hidden, $('#error').textContent);
-
-  // 4. смена типа распределения, доли в таблице, проценты с запятой
-  const sel = $('[data-path="factors.1.dist.type"]');
-  sel.value = 'triangular'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
-  check('Смена типа на треугольное: появились поля мин/обычно/макс', !!$('[data-path="factors.1.dist.mode"]'));
-  type($('[data-path="factors.1.dist.mode"]'), '50');
-  check('Неверные параметры: ошибка про «обычно»', /обычно/.test($('#error').textContent), $('#error').textContent);
-  type($('[data-path="factors.1.dist.mode"]'), '3');
-  check('Исправили — ошибка исчезла', $('#error').hidden, $('#error').textContent);
-  type($('[data-path="factors.0.dist.weights.0"]'), '150');
-  check('Таблица: доля пересчиталась (150 из 150+30+15+5 = 75 %)', $('[data-share="factors.0.dist.0"]').textContent === '75,0 %', $('[data-share="factors.0.dist.0"]').textContent);
-  type($('[data-path="factors.2.dist.p"]'), '40,5');
-  await sleep(300);
-  check('Проценты с запятой: 40,5 → «да 40,5 %»', /да 40,5 %/.test($('[data-shape="factors.2.dist"]').textContent), $('[data-shape="factors.2.dist"]').textContent);
-  const dataSel = $('[data-path="factors.0.dist.type"]');
-  dataSel.value = 'data'; dataSel.dispatchEvent(new w.Event('change', { bubbles: true }));
-  type($('[data-path="factors.0.dist.values"]'), '0 0 5; 10\n2,5 abc');
-  check('Данные с мусором: ошибка про позицию 6', /позиция 6/.test($('#error').textContent), $('#error').textContent);
-  type($('[data-path="factors.0.dist.values"]'), '0 0 5; 10\n2,5');
-  check('Данные исправлены: 5 знач.', $('#error').hidden && /^5 знач/.test($('[data-count="factors.0.dist"]').textContent), $('[data-count="factors.0.dist"]').textContent);
-
-  // 5. шаблон «Два кубика»: точный ответ 16,67 %
-  w.confirm = () => true;
-  const tpl = $('#tpl'); tpl.value = 'dice'; tpl.dispatchEvent(new w.Event('change', { bubbles: true }));
-  await until(() => done() && $('.exact') && /36 комбинаций/.test($('.exact').textContent));
-  check('Кубики: точный перебор 36 комбинаций = 16,67 %', /16,67 %/.test($('.exact').textContent), $('.exact').textContent.trim().slice(0, 90));
-  check('Кубики: Монте-Карло попал в интервал', $('.exact').classList.contains('good'), hero());
-  check('Кубики: гистограмма из 11 столбиков', d.querySelectorAll('#ch-hist .hit').length === 11, d.querySelectorAll('#ch-hist .hit').length);
-
-  // 6. событие можно не задавать — тогда считается только итог
-  type($('[data-path="event.formula"]'), '');
-  $('#run').click();
-  await until(() => done() && !$('.hero'));
-  check('Без события: нет блока вероятности, есть среднее', !$('.hero') && /Среднее/.test($('#results-body').textContent));
-  check('Без события: торнадо по среднему', d.querySelectorAll('#ch-tornado .lbl').length === 2);
-
-  // ================================================================ этап 3
-  // 7. разбор CSV
-  const P = w.eval('CSV').parse;     // const CSV — не свойство window, поэтому берём через eval во фрейме
-  let c = P('﻿Дата;Мин;Дождь\r\n01.09.2026;2,5;да\r\n02.09.2026;10;нет\r\n');
-  check('CSV русского Excel: «;», заголовок, 2,5 → 2.5, текст пропущен',
-    c.delimiter === ';' && c.hasHeader && c.columns[1].name === 'Мин' && c.columns[1].values.join() === '2.5,10' &&
-    c.columns[0].values.length === 0 && c.columns[2].skipped === 2, JSON.stringify(c.columns.map(x => x.values)));
-  c = P('a,b\n1,"2,5"\n3,4\n');
-  check('CSV через запятую с кавычками', c.delimiter === ',' && c.columns[1].values.join() === '2.5,4', JSON.stringify(c.columns));
-  c = P('5\n7\n\n9\n');
-  check('Один столбец без заголовка', !c.hasHeader && c.columns.length === 1 && c.columns[0].values.join() === '5,7,9');
-  c = P('x\ty\n1\t2\n');
-  check('Табуляция', c.delimiter === '\t' && c.columns[1].values.join() === '2');
-
-  // 8. перетаскиваем настоящий файл статистики на фактор «Из данных»
-  const pickTpl = async id => {
-    const t = $('#tpl'); t.value = id; t.dispatchEvent(new w.Event('change', { bubbles: true }));
-    await sleep(50);
-    await until(() => done() && $('.hero-value'));
-  };
-  await pickTpl('meeting_data');
-  check('Шаблон «по статистике»: точный перебор 42,47 %', /42,47 %/.test($('.exact').textContent), $('.exact').textContent.trim().slice(0, 100));
-  const xhr = new XMLHttpRequest();
-  xhr.open('GET', '../данные/статистика_совещаний.csv', false);
-  xhr.overrideMimeType('text/plain; charset=utf-8');
-  xhr.send();
-  const drop = (target, file) => {
-    const dt = new w.DataTransfer(); dt.items.add(file);
-    target.dispatchEvent(new w.DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-  };
-  drop($('[data-drop="factors.0.dist"]'), new w.File([xhr.responseText], 'статистика_совещаний.csv', { type: 'text/csv' }));
-  await until(() => !$('[data-csv-pick="factors.0.dist"]').hidden);
-  const pickBtns = d.querySelectorAll('[data-csv-pick="factors.0.dist"] button');
-  check('Файл из 5 столбцов: предложены 3 числовых (дата и «Дождь» — не числа)', pickBtns.length === 3, [...pickBtns].map(b => b.textContent.trim().split('\n')[0]).join(' | '));
-  pickBtns[1].click();
-  await sleep(200);
-  check('Взят столбец «Обед_затянулся_мин»: 60 значений', /Загружено 60 знач\. из столбца «Обед_затянулся_мин»/.test($('[data-csv-status="factors.0.dist"]').textContent), $('[data-csv-status="factors.0.dist"]').textContent);
-  check('Значения попали в поле (есть 10,5)', /10,5/.test($('[data-drop="factors.0.dist"]').value) && $('#error').hidden);
-
-  // 9. файл в кодировке Windows-1251 (так сохраняет русский Excel)
-  const cp1251 = str => Uint8Array.from([...str].map(ch => {
-    const k = ch.charCodeAt(0);
-    return k >= 0x410 && k <= 0x44f ? k - 0x410 + 0xc0 : k;
-  }));
-  drop($('[data-drop="factors.1.dist"]'), new w.File([cp1251('Минуты\n1,5\n2\n')], 'win1251.csv'));
-  await until(() => /Загружено/.test($('[data-csv-status="factors.1.dist"]').textContent));
-  check('Windows-1251: заголовок «Минуты» прочитан, значения 1,5 и 2', /«Минуты»/.test($('[data-csv-status="factors.1.dist"]').textContent) && /^1,5 2$/.test($('[data-drop="factors.1.dist"]').value.trim()), $('[data-csv-status="factors.1.dist"]').textContent);
-  drop($('[data-drop="factors.2.dist"]'), new w.File(['только;текст\nа;б\n'], 'pusto.csv'));
-  await until(() => /не нашлось/.test($('[data-csv-status="factors.2.dist"]').textContent));
-  check('Файл без чисел: понятное сообщение', /не нашлось чисел/.test($('[data-csv-status="factors.2.dist"]').textContent));
-
-  // 10. сохранить сценарий и сводку (перехватываем скачивание)
-  const downloads = [];
-  w.HTMLAnchorElement.prototype.click = function () { downloads.push({ name: this.download, href: this.href }); };
-  $('#sc-name').value = 'Мой тест'; $('#sc-name').dispatchEvent(new w.Event('input', { bubbles: true }));
-  $('#btn-save').click();
-  const saved = JSON.parse(await (await w.fetch(downloads[0].href)).text());
-  check('Сохранить: файл «Мой тест.json» со сценарием', downloads[0].name === 'Мой тест.json' && saved.format === 'probability-analyzer' &&
-    saved.scenario.factors.length === 3 && saved.settings.seed === 20261117, downloads[0].name);
-  $('#run').click();
-  await until(() => done() && $('#results').className.indexOf('stale') < 0);
-  $('#btn-summary').click();
-  const csvText = await (await w.fetch(downloads[1].href)).text();
-  check('Сводка CSV: «;», дробная запятая, точный ответ, торнадо', /Показатель;Значение/.test(csvText) && /Точный ответ \(перебор\);0,4\d+/.test(csvText) &&
-    /Влияние факторов;/.test(csvText) && /— результаты\.csv$/.test(downloads[1].name), csvText.split('\r\n').slice(4, 7).join(' | '));
-
-  // 11. открыть сценарий из файла (кубики, 10 000 прогонов, сид 5)
-  w.confirm = () => true;
-  const dice = w.MC_TEMPLATES.find(t => t.id === 'dice');
-  const dt2 = new w.DataTransfer();
-  dt2.items.add(new w.File([JSON.stringify({ format: 'probability-analyzer', version: 1, settings: { n: 10000, seed: 5 }, scenario: dice })], 'кубики.json'));
-  $('#open-file').files = dt2.files;
-  $('#open-file').dispatchEvent(new w.Event('change', { bubbles: true }));
-  await until(() => done() && $('.exact') && /36 комбинаций/.test($('.exact').textContent));
-  check('Открыть: сценарий, число прогонов и сид из файла', $('#n').value === '10000' && $('#seed').value === '5' && $('#tpl').value === '', `${$('#n').value} / ${$('#seed').value}`);
-  const bad = new w.DataTransfer(); bad.items.add(new w.File(['{"hello": 1}'], 'не_то.json'));
-  $('#open-file').files = bad.files;
-  $('#open-file').dispatchEvent(new w.Event('change', { bubbles: true }));
-  await until(() => !$('#error').hidden);
-  check('Открыть чужой JSON: понятная ошибка', /это не файл сценария/.test($('#error').textContent), $('#error').textContent);
-
-  // 12. все шаблоны считаются без ошибок
-  for (const t of w.MC_TEMPLATES) {
-    await pickTpl(t.id);
-    check(`Шаблон «${t.name}» считается`, $('#error').hidden && !!$('.hero-value'), hero());
-  }
-  await pickTpl('project');
-  check('Сроки проекта: уложиться в 30 дней ≈ 34 %', Math.abs(parseFloat(hero().replace(',', '.')) - 34.2) < 1, hero());
-
-  // ================================================================ этап 4: зависимости
-  const pnum = s => parseFloat(String(s).replace(/\s/g, '').replace(',', '.'));
-  const indepRow = k => [...d.querySelectorAll('#indep .cmp tbody tr')][k];
-  const waitIndep = () => until(() => d.querySelector('#indep .cmp'), 30000);
-
-  // 13. совещание в дождь: ветки, сравнение «со связями / без связей»
-  await pickTpl('meeting_rain');
-  check('Дождь: 52,8 % (точно 52,76 %)', Math.abs(pnum(hero()) - 52.76) < 0.3, hero());
-  const ivan = $('.item[data-f="1"]');
-  check('Дождь: «Иван» помечен зависимым, две ветки «да / нет»', ivan.classList.contains('dependent') &&
-    [...ivan.querySelectorAll('.case-head')].map(x => x.textContent).join(' | ') === 'Если «Дождь» да | Если «Дождь» нет',
-    [...ivan.querySelectorAll('.case-head')].map(x => x.textContent).join(' | '));
-  await waitIndep();
-  const r0 = indepRow(0).children;
-  check('Без связей ≈ 51,2 % (точно 51,19 %)', Math.abs(pnum(r0[2].textContent) - 51.19) < 0.3, r0[2].textContent);
-  check('Вывод: наивный расчёт недооценивает', /недооценивает/.test($('#indep .verdict').textContent), $('#indep .verdict').textContent);
-  check('Торнадо: есть «Дождь»', [...d.querySelectorAll('#ch-tornado .lbl')].some(x => x.textContent === 'Дождь'));
-
-  // 14. дни целиком: точно 25/60, без связей 42,47 %
-  await pickTpl('meeting_days');
-  check('Дни целиком: точный перебор 41,67 % (25 из 60)', /41,67 %/.test($('.exact').textContent), $('.exact').textContent.trim().slice(0, 80));
-  await waitIndep();
-  check('Дни целиком: без связей точно 42,47 %, переоценка', indepRow(1) && /42,47 %/.test(indepRow(1).textContent) &&
-    /переоценивает/.test($('#indep .verdict').textContent), indepRow(1) && indepRow(1).textContent);
-  check('Дни целиком: «Дождь» и «День» скрыты в торнадо', d.querySelectorAll('#ch-tornado .lbl').length === 3);
-
-  // 15. проект с общей причиной: наивный расчёт обещает больше, хвост тяжелее
-  await pickTpl('project_risk');
-  await waitIndep();
-  // здесь 10 000 прогонов (настройка осталась от открытого ранее файла) -> погрешность ±0,8 %, допуск 2 п.п.
-  check('Проект: со связью ≈ 82,8 %, без связи ≈ 88,3 %', Math.abs(pnum(hero()) - 82.8) < 2 &&
-    Math.abs(pnum(indepRow(0).children[2].textContent) - 88.3) < 2, `${hero()} / ${indepRow(0).children[2].textContent}`);
-  check('Проект: вывод «переоценивает» и про хвост', /переоценивает/.test($('#indep .verdict').textContent) &&
-    /Хвост тоже другой/.test($('#indep .verdict').textContent), $('#indep .verdict').textContent);
-
-  // 16. «Зависит от» руками: Обед зависит от Ивана -> 4 ветки; новое значение у Ивана -> предупреждение -> обновить
-  await pickTpl('meeting');
-  const depSel = $('.item[data-f="1"] [data-kind="dep"]');
-  check('У «Обеда» можно выбрать «зависит от Ивана»', depSel && [...depSel.options].some(o => o.value === 'Иван'));
-  depSel.value = 'Иван'; depSel.dispatchEvent(new w.Event('change', { bubbles: true }));
-  check('Обед зависит от Ивана: 4 ветки (= 0, 5, 10, 20), ошибок нет',
-    $('.item[data-f="1"]').querySelectorAll('.case').length === 4 && $('#error').hidden, $('#error').textContent);
-  $('[data-act="add-row"][data-p="factors.0.dist"]').click();
-  await sleep(50);
-  check('У Ивана новое значение 25: понятная ошибка и предложение обновить ветки',
-    /бывает равен 25, а ветки для этого значения нет/.test($('#error').textContent) && !!$('.item[data-f="1"] [data-act="sync"]'), $('#error').textContent);
-  $('.item[data-f="1"] [data-act="sync"]').click();
-  await sleep(50);
-  check('После «Обновить ветки»: 5 веток, ошибок нет', $('.item[data-f="1"]').querySelectorAll('.case').length === 5 && $('#error').hidden, $('#error').textContent);
-  const depSel2 = $('.item[data-f="1"] [data-kind="dep"]');
-  depSel2.value = ''; depSel2.dispatchEvent(new w.Event('change', { bubbles: true }));
-  check('«Ни от чего»: снова обычная таблица', !$('.item[data-f="1"]').classList.contains('dependent') &&
-    !!$('[data-path="factors.1.dist.type"]') && $('#error').hidden);
-  // переименование причины обновляет «зависит от»
-  depSel2.value = 'Иван';
-  const dep3 = $('.item[data-f="1"] [data-kind="dep"]'); dep3.value = 'Иван'; dep3.dispatchEvent(new w.Event('change', { bubbles: true }));
-  type($('[data-path="factors.0.name"]'), 'Пётр');
-  await sleep(50);
-  check('Переименовали Ивана в Петра: ветки «Обеда» теперь «Если «Пётр» …»',
-    /Если «Пётр»/.test($('.item[data-f="1"] .case-head').textContent) && $('#error').hidden, $('#error').textContent);
-
-  // 17. строки таблицы руками и из CSV
-  $('#btn-new').click();
-  await sleep(50);
-  const tsel = $('[data-path="factors.0.dist.type"]');
-  tsel.value = 'rows'; tsel.dispatchEvent(new w.Event('change', { bubbles: true }));
-  type($('[data-kind="rows"]'), 'Х;Дождь\n1;да\n3;нет\n5;да', false);
-  check('Строки руками: 3 строки × 2 столбца, «да» → 1', /^3 строк × 2 столб\.: Х, Дождь/.test($('[data-count="factors.0.dist"]').textContent),
-    $('[data-count="factors.0.dist"]').textContent);
-  type($('[data-path="result.formula"]'), 'Х + Дождь');
-  type($('[data-path="event.formula"]'), 'Итог >= 4');
-  check('Формулы видят столбцы «Х» и «Дождь»', $('#error').hidden, $('#error').textContent);
-  $('#run').click();
-  await until(() => done() && $('.exact') && /3 комбинаций/.test($('.exact').textContent));
-  // итоги по строкам: 1 + 1 = 2, 3 + 0 = 3, 5 + 1 = 6 -> «>= 4» только в одной строке из трёх
-  check('Строки: точный перебор 3 строк = 33,33 % (1 из 3)', /33,33 %/.test($('.exact').textContent), $('.exact').textContent.replace(/\s+/g, ' ').slice(0, 90));
-  drop($('[data-drop="factors.0.dist"]'), new w.File([xhr.responseText], 'статистика_совещаний.csv', { type: 'text/csv' }));
-  await until(() => /Загружено 60 строк/.test($('[data-csv-status="factors.0.dist"]').textContent));
-  const st = $('[data-csv-status="factors.0.dist"]').textContent;
-  check('CSV в строки: 60 строк, 4 столбца, «Дата» не взята', /столбцы: Автобус_мин, Обед_затянулся_мин, Переговорка_занята_мин, Дождь/.test(st) &&
-    /текстовые столбцы не взяты: Дата/.test(st), st);
-
   // ================================================================ простой режим (для обычного человека)
   let w2 = null, d2 = null;
   const goSimple = async hash => {
@@ -287,6 +44,8 @@ async function until(fn, ms = 20000) {
     /Конструктор вероятностей/.test(q('#s-editor').textContent) && !q('#s-q'));
   await goSimple('');
   await ready();
+  check('Режима специалиста нет: ни переключателя, ни кнопки «Открыть в режиме специалиста»',
+    !q('#expert-view') && !q('[data-mode-btn]') && !q('#s-to-expert') && !/Для специалиста/.test(d2.body.textContent));
   // P = P(транспорт ≤ 5) · P(обед ≤ 10) · P(переговорка свободна) = 0,8 · 0,9 · 0,75 = 0,54
   check('Первый заход: пример из задания, 4 фактора, 3 расчёта, 54 из 100 (точно 0,8·0,9·0,75)',
     qa('.s-item:not(.step)').length === 4 && qa('.s-item.step').length === 3 && /^54 из 100/.test(big()) &&
@@ -432,14 +191,7 @@ async function until(fn, ms = 20000) {
   check('Собеседования: «нужно примерно 15 попыток» для 9 из 10', /нужно примерно 15 попыток/.test(resText()));
   check('Шанс 15 %: подпись «1,5 из 10»', /1,5 из 10/.test(q('.ten-txt').textContent), q('.ten-txt').textContent);
 
-  // 28. переход в режим специалиста: тот же расчёт, составной тип виден
-  q('#s-to-expert').click();
-  await until(() => d2.body.dataset.mode === 'expert' && q('.hero-value') && q('#run').textContent.includes('Рассчитать'), 60000);
-  check('«Открыть в режиме специалиста»: ≈ 72,7 %, тип «Повтор N раз» виден', !q('#expert-view').hidden && q('#error').hidden &&
-    Math.abs(pnum(q('.hero-value').textContent) - 72.75) < 0.3 && /Повтор N раз/.test(q('#factors').textContent), q('.hero-value') && q('.hero-value').textContent);
-
   // 29. «Новая ситуация» — снова выбор схемы
-  q('[data-mode-btn="simple"]').click();
   q('#s-new').click();
   check('«Новая ситуация»: снова стартовый экран конструктора', qa('.scheme').length === 3 && !!q('[data-s-act="blank-b"]'));
 

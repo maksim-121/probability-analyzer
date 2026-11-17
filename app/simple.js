@@ -12,7 +12,7 @@
  *   until — «Получится ли до срока?»: пробую, пока не выйдет (работа, продажа) — попытки во времени;
  *   tries — «Получится ли с нескольких попыток?»: фиксированное число попыток (экзамен, поступление).
  * Про каждое число — «Что вы о нём знаете?»: точно / примерно / может случиться / как было раньше.
- * Из ответов собирается обычный сценарий движка (тот же, что в режиме специалиста).
+ * Из ответов собирается обычный сценарий движка (engine/engine.js).
  *
  * Расчёт («Мои расчёты») = один или два варианта (сравнение «а что если»); сохраняется сам, отправляется ссылкой.
  */
@@ -1698,18 +1698,17 @@ const PASimple = (() => {
 
     const hinted = (s.goal && s.goal.hint) || (s.until && s.until.words.hint) || (s.tries && s.tries.hint);
     html += `<p class="note s-honest">Ответ настолько точен, насколько точны ваши оценки${hinted ? ' (подсказки «не знаете?» — очень примерные)' : ''}. Программа проигрывает ситуацию ${S.n.toLocaleString('ru-RU')} раз.</p>
-      <details class="card s-details"><summary>Подробности для специалиста</summary>
+      <details class="card s-details"><summary>Подробности расчёта</summary>
       <ul class="plain">
         ${ev ? `<li>Вероятность: ${pct(ev.p, 2)} ± ${pct(ev.hi - ev.p, 2)} (95 % интервал), ${S.n.toLocaleString('ru-RU')} прогонов, сид ${SEED}.</li>` : `<li>${S.n.toLocaleString('ru-RU')} прогонов Монте-Карло, сид ${SEED}. Перцентили: P10 ${num(R.pct[10])}, P50 ${num(R.pct[50])}, P90 ${num(R.pct[90])}, P99 ${num(R.pct[99])}.</li>`}
         ${last.exact && ev ? `<li>Точный ответ полным перебором ${last.exact.combos.toLocaleString('ru-RU')} вариантов: ${pct(last.exact.p, 2)}.</li>` : ''}
         ${isTries && ev ? `<li>Точно по биномиальной формуле: ${pct(binomAtLeast(s.tries.n, s.tries.pct / 100, s.tries.need), 2)}.</li>` : ''}
         <li>Итог: <code>${esc(last.sc.result.formula)}</code>${last.sc.event ? `, успех: <code>${esc(last.sc.event.formula)}</code>` : ''}.</li>
       </ul>
-      <button class="btn" id="s-to-expert">Открыть в режиме специалиста →</button></details>`;
+      </details>`;
 
     $('#s-results').innerHTML = html;
     drawHist();
-    $('#s-to-expert').addEventListener('click', () => PA.openExpert(last.sc, { n: 1000000, seed: SEED }));
   }
 
   /** График «шанс к каждой дате» для целей и «до срока». */
@@ -1772,7 +1771,7 @@ const PASimple = (() => {
     else calc = calcOf(meetingB(false));   // первый заход: сразу пример из задания
     renderMyCount();
     render();
-    document.addEventListener('pa:mode', e => { if (e.detail !== 'simple') return; if (!last) run(); else drawHist(); });
+    if (sit().scheme) run();
     let rt;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawHist, 150); });
   }

@@ -59,12 +59,9 @@
 |---|---|
 | ![Начало](docs/screenshots/simple_start.jpg) | ![Жим 100 кг](docs/screenshots/simple_goal.jpg) |
 
-**Режим специалиста** — полный редактор для преподавателя и сложных случаев: распределения, формулы, зависимости, загрузка CSV,
-«торнадо», сходимость, точный перебор. Из простого режима туда ведёт кнопка «Открыть в режиме специалиста» — там тот же расчёт со всеми формулами.
-
-| Режим специалиста | Телефон |
+| Совещание с дождём: общая причина | Телефон |
 |---|---|
-| ![Режим специалиста](docs/screenshots/main.jpg) | ![Телефон](docs/screenshots/simple_mobile.jpg) |
+| ![Совещание с дождём](docs/screenshots/simple_rain.jpg) | ![Телефон](docs/screenshots/simple_mobile.jpg) |
 
 ## Пример: начнётся ли совещание вовремя
 
@@ -85,53 +82,34 @@
 
 ## Что умеет
 
-- **Сценарий из четырёх шагов:** случайные факторы → расчётные величины → итог → событие. Формулы пишутся на русском: `max(Обед − 10; 0)`, `если(Занята; Затягивание; 0)`, `Задержка <= 5 и не Дождь`.
-- **6 распределений:** таблица «значение — вес» (как лента барабана в слоте), да/нет, равномерное, треугольное («минимум / обычно / максимум»), нормальное, из данных.
-- **Зависимые факторы:**
-  - «Зависит от»: своё распределение для каждого значения причины (в дождь автобус опаздывает сильнее);
-  - «Строки таблицы»: каждый прогон берёт один день наблюдений целиком, поэтому связи из данных сохраняются;
-  - приложение само сравнивает результат с наивным расчётом, где связи забыты, и показывает разницу.
-- **Результат:**
-  - вероятность с 95 % интервалом;
-  - точный ответ полным перебором, если все факторы дискретные;
-  - среднее, медиана, перцентили P1–P99, гистограмма;
-  - «торнадо» — какой фактор сильнее всего двигает ответ;
-  - график сходимости;
-  - калькулятор «P(итог ≤ X)»;
-  - вывод простыми словами.
-- **Данные:** загрузка CSV из русского Excel (разделитель «;», дробная запятая, кодировка Windows-1251).
-- **Файлы:** сохранить и открыть сценарий (.json), скачать сводку для Excel.
+- **Факторы семи видов** (внутри — распределения движка): точно; примерно — треугольное «от / обычно / до»; любое от–до — равномерное;
+  может случиться — смесь «ничего / сколько-то»; да / нет; варианты с процентами — таблица «значение — вес» (как лента барабана в слоте);
+  по данным — выбор из прошлых значений.
+- **Общая причина:** фактор «да / нет» (дождь), от которого другие факторы ведут себя по-другому. Приложение само сравнивает
+  ответ с наивным расчётом, где связь забыта, и показывает разницу.
+- **Итог из блоков:** сумма, самое большое, самое маленькое, разница (можно «не меньше 0»), произведение, «если … то … иначе …»,
+  своя формула на русском (`max(Обед - 10; 0)`, `если(Занята = 1; Затяжка; 0)`). При переименовании фактора формулы правятся сами.
+- **Ответ:** «N из 100» и 100 точек, итог словами («скорее всего ≈ 5 мин, в 8 случаях из 10 — от 0 до 13»), какой нужен порог
+  на 9 из 10, «что поможет больше всего», проверка на оптимизм, гистограмма; в подробностях — вероятность с 95 % интервалом
+  и точный ответ полным перебором, если все факторы дискретные.
+- **Особые расчёты во времени:** когда дойду до цели (вес, жим, накопления — с датами и графиком «шанс к каждой дате»),
+  получится ли до срока (поиск работы, продажа), получится ли с нескольких попыток (с точной биномиальной формулой).
+- Варианты А и Б рядом, «Мои расчёты» (сохраняются сами), «Поделиться» ссылкой.
 - **Повторяемость:** генератор с сидом — тот же сид всегда даёт те же самые числа.
 - Светлая и тёмная тема, версия для телефона. Миллион прогонов считается меньше чем за секунду.
 
-## Готовые сценарии
+## Примеры
 
-| Шаблон | Вопрос | Ответ |
+| Пример | Вопрос | Ответ |
 |---|---|---|
-| Совещание в 14:00 | Задержка ≤ 5 мин | 53,9 % (точно 54 %) |
-| Два кубика | Сумма ≥ 10 | 16,67 %, перебор 36 комбинаций |
-| Совещание по статистике (60 дней) | Задержка ≤ 5 мин | 42,4 % (перебор 42,47 %) |
-| Доставка заказа за 3 часа | Время ≤ 180 мин | 83 % |
-| Сроки проекта | Срок ≤ 30 дней | 34 %; план «по обычно» в 25 дней выполняется лишь в 6 % случаев |
-| Совещание в дождь | Задержка ≤ 5 мин | 52,8 % со связью, 51,2 % если её забыть |
-| Совещание по статистике: дни целиком | Задержка ≤ 5 мин | ровно 25 из 60 = 41,67 % |
-| Проект: сырые требования | Срок ≤ 40 дней | 82,8 % со связью; наивный расчёт обещает 88,4 % |
+| Совещание (задача из задания) | Задержка ≤ 5 мин | 54 из 100 (точно 0,8 · 0,9 · 0,75 = 54 %) |
+| Совещание, если бывает дождь | Задержка ≤ 5 мин | 53 из 100 со связью, 51 — если её забыть |
+| Совещание по статистике 60 дней | Задержка ≤ 5 мин | 42 из 100 (перебор 42,47 %) |
+| Хватит ли денег на поездку | Всего ≤ 70 000 ₽ | 92 из 100 |
+| Успеть на самолёт | Всего ≤ 2 ч | 92 из 100 |
+| Два кубика | Сумма ≥ 10 | 17 из 100, перебор 36 вариантов = 16,67 % |
 
 Данные «статистики» учебные: они сгенерированы программой ([tools/make_sample_data.py](tools/make_sample_data.py)), это пример формата, а не наблюдения из реального офиса.
-
-## Скриншоты
-
-| Графики: распределение и «торнадо» | Телефон |
-|---|---|
-| ![Графики](docs/screenshots/charts.jpg) | ![Телефон](docs/screenshots/mobile.jpg) |
-
-**Зависимые факторы и сравнение с наивным расчётом**
-
-![Зависимые факторы](docs/screenshots/dependencies.jpg)
-
-**Тёмная тема**
-
-![Тёмная тема](docs/screenshots/dark.jpg)
 
 ## Как проверена математика
 
@@ -139,7 +117,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 108 проверок |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, сравнение вариантов, ссылка, особые расчёты | 42 проверки |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -158,16 +136,16 @@ python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest   # страница: 108 проверок
+python tests/run_selftest.py uitest   # страница: 42 проверки
 ```
 
 ## Структура
 
 ```
 index.html            страница
-app/                  интерфейс: simple.js (простой режим), app.js (режим специалиста), charts.js (графики SVG), csv.js (CSV)
+app/                  интерфейс: simple.js (конструктор и ответ), charts.js (графики SVG), csv.js (имена для формул)
 engine/engine.js      движок: генератор, распределения, язык формул, прогон, статистика, перебор, связи
-engine/templates.js   готовые сценарии
+engine/templates.js   учебные данные для примера «по статистике»
 reference/            Python-эталон движка и его тесты
 tests/                самопроверка движка и страницы в браузере
 данные/               учебный CSV со «статистикой» 60 дней
@@ -189,8 +167,8 @@ docs/                 математика, архитектура, скринш
 ## Ограничения
 
 - Всё считается в браузере, поэтому за раз не больше 5 млн прогонов.
-- Зависеть можно только от фактора выше по списку, у причины до 12 отдельных значений.
-- Связи задаются явно («зависит от») или берутся из таблицы наблюдений. Коэффициентов корреляции между непрерывными факторами нет.
+- Общая причина — фактор «да / нет»; других связей между факторами (коэффициентов корреляции) нет.
+- Прошлые значения вписываются вручную, загрузки CSV нет.
 
 ---
 
@@ -198,9 +176,9 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
-- **Simple mode** is a universal constructor (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link. **Expert mode** keeps the full editor.
-- A scenario is built from random factors (6 distribution types), formulas, a result and an event. Example: will a meeting start on time given bus delays, lunch overruns and a busy meeting room? 53.94 % ± 0.10 % on 1M runs, exact answer 54 %.
-- Dependent factors: a factor can depend on another one ("rain → bus and lunch delays"), and a dataset can be sampled whole-row so real-world correlations are kept. The app compares the result with a naive model that ignores dependencies. Example: with a common cause the project meets the 40-day deadline in 82.8 % of cases, while the naive model promises 88.4 %.
-- Results: probability with a 95 % CI, exact enumeration when all factors are discrete, percentiles, histogram, tornado sensitivity chart, convergence chart.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 108 UI checks.
+- **Simple mode** is a universal constructor (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link.
+- Example from the task: will a meeting start on time given transport delays, lunch overruns and a busy meeting room? 54 out of 100, exact answer 0.8 · 0.9 · 0.75 = 54 %.
+- Common cause: factors can depend on a yes/no factor ("rain → transport and lunch delays"); the app compares the result with a naive model that ignores the link.
+- Results: plain-language answer, probability with a 95 % CI, exact enumeration when all factors are discrete, histogram, what helps most.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 42 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/

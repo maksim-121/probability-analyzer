@@ -199,9 +199,6 @@
   .verdict { margin: 10px 0 0; font-size: 14px; }
 
   /* --- режимы и панели */
-  .modes { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
-  .modes button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 600; color: var(--text-2); }
-  .modes button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; max-width: 1440px; margin: 0 auto; padding: 4px 16px; }
 
   /* --- простой режим: вопросы */
@@ -374,7 +371,6 @@
   @media (max-width: 520px) {
     .toolbar { gap: 6px; }
     .toolbar .btn { padding: 5px 10px; font-size: 14px; }
-    .modes button { padding: 6px 10px; font-size: 14px; }
     .s-big { font-size: 52px; }
     .hero-value { font-size: 44px; }
     .name { width: 7.5em; }
@@ -390,13 +386,8 @@
     <h1>Анализатор вероятностей</h1>
     <p>Опишите, что может пойти по-разному, — программа проиграет это сотни тысяч раз и посчитает шансы.</p>
   </div>
-  <div class="modes" role="tablist" aria-label="Режим">
-    <button role="tab" data-mode-btn="simple" aria-selected="true">Простой режим</button>
-    <button role="tab" data-mode-btn="expert" aria-selected="false">Для специалиста</button>
-  </div>
 </header>
 
-<!-- ============================== Простой режим ============================== -->
 <div id="simple-view">
   <div class="toolbar">
     <button class="btn" id="s-new">＋ Новая ситуация</button>
@@ -412,88 +403,6 @@
   <button class="s-sticky" id="s-sticky" type="button" hidden></button>
 </div>
 
-<!-- ============================== Режим специалиста ============================== -->
-<div id="expert-view" hidden>
-  <div class="toolbar">
-    <label class="field">Шаблон <select id="tpl" aria-label="Шаблон"></select></label>
-    <span class="badge" id="tpl-mod" hidden>изменён</span>
-    <button class="btn" id="btn-reset" title="Вернуть шаблон к исходному виду">Сбросить</button>
-    <button class="btn" id="btn-new">Новый</button>
-    <button class="btn" id="btn-open" title="Открыть сценарий из файла .json">Открыть…</button>
-    <button class="btn" id="btn-save" title="Сохранить сценарий в файл .json">Сохранить</button>
-    <input type="file" id="open-file" accept=".json,application/json" hidden>
-    <input type="file" id="csv-file" accept=".csv,.txt,text/csv,text/plain" hidden>
-  </div>
-<main class="layout">
-  <!-- ============================== Сценарий ============================== -->
-  <section class="pane" id="scenario" aria-label="Сценарий">
-    <div class="card">
-      <input id="sc-name" class="title-input" data-path="name" data-kind="text" aria-label="Название сценария">
-      <textarea id="sc-desc" class="desc-input" data-path="description" data-kind="text" rows="2" aria-label="Описание"></textarea>
-    </div>
-
-    <div class="card step">
-      <h2><span class="step-num">1</span>Случайные факторы <span>то, что может пойти по-разному</span></h2>
-      <div class="items" id="factors"></div>
-      <button class="btn add" data-act="add-factor">+ Фактор</button>
-    </div>
-
-    <div class="card step">
-      <h2><span class="step-num">2</span>Расчётные величины <span>формулы от факторов, по порядку сверху вниз</span></h2>
-      <div class="items" id="derived"></div>
-      <button class="btn add" data-act="add-derived">+ Величина</button>
-    </div>
-
-    <div class="card step">
-      <h2><span class="step-num">3</span>Итог <span>главное число, которое нас интересует</span></h2>
-      <div class="items" id="result-edit"></div>
-    </div>
-
-    <div class="card step">
-      <h2><span class="step-num">4</span>Событие <span>условие «да / нет»; его вероятность — главный ответ</span></h2>
-      <div class="items" id="event-edit"></div>
-    </div>
-
-    <details class="card help">
-      <summary>Как писать формулы</summary>
-      <ul>
-        <li>Имена — как у факторов и величин выше: <code>Иван</code>, <code>Обед</code>. Регистр не важен, пробелы в именах нельзя (<code>Обед_Марии</code>).</li>
-        <li>Арифметика: <code>+ − * / ^</code> и скобки. Дробные числа — через точку: <code>0.5</code>.</li>
-        <li>Сравнения: <code>&lt; &lt;= &gt; &gt;= = &lt;&gt;</code>. Истина = 1, ложь = 0.</li>
-        <li>Логика: <code>и</code>, <code>или</code>, <code>не</code> — например <code>Задержка &lt;= 5 и не Дождь</code>.</li>
-        <li><code>max(a; b; …)</code> — наибольшее (кто пришёл последним), <code>min(…)</code> — наименьшее.</li>
-        <li><code>если(условие; да; нет)</code> — например <code>если(Занята; Затягивание; 0)</code>.</li>
-        <li>Ещё: <code>abs</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>sqrt</code> (или <code>модуль</code>, <code>округл</code>, <code>вниз</code>, <code>вверх</code>, <code>корень</code>).</li>
-        <li>Аргументы разделяются <code>;</code> или <code>,</code>. При переименовании фактора формулы обновляются сами.</li>
-      </ul>
-    </details>
-  </section>
-
-  <!-- ============================== Результат ============================== -->
-  <section class="pane" id="results" aria-label="Результат" aria-live="polite">
-    <div class="card runbar">
-      <label class="field">Прогонов
-        <select id="n">
-          <option value="10000">10 000</option>
-          <option value="100000">100 000</option>
-          <option value="1000000" selected>1 000 000</option>
-          <option value="5000000">5 000 000</option>
-        </select>
-      </label>
-      <label class="field">Сид (повторяемость)
-        <span class="seed"><input id="seed" inputmode="numeric" value="20261117">
-        <button class="btn" id="seed-rand" title="Случайный сид" aria-label="Случайный сид">🎲</button></span>
-      </label>
-      <button class="primary" id="run" title="Ctrl + Enter">▶ Рассчитать</button>
-      <progress id="progress" max="1" value="0" hidden></progress>
-    </div>
-    <p class="error" id="error" hidden></p>
-    <p class="stale-banner" id="stale" hidden>Сценарий изменён — нажмите «Рассчитать», чтобы обновить результат.</p>
-    <div id="results-body" class="pane"></div>
-  </section>
-</main>
-</div>
-
 <footer>
   Генератор с сидом (xoshiro128**): одинаковый сид — одинаковый результат. Движок сверяется с Python-эталоном —
   <a href="tests/selftest.html">самопроверка движка</a>.
@@ -505,6 +414,6 @@
 <script src="app/csv.js"></script>
 <script src="app/charts.js"></script>
 <script src="app/simple.js"></script>
-<script src="app/app.js"></script>
+<script>PASimple.init();</script>
 </body>
 </html>
