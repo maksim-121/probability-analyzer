@@ -295,6 +295,15 @@ async function until(fn, ms = 20000) {
     / из 100/.test(big()) && /найдёте работу/.test(q('.s-answer').textContent) && /Чтобы найти работу .* собеседований — примерно \d+ в неделю/.test(resText()),
     (resText().match(/Чтобы найти[^.]*\./) || [''])[0]);
   check('Что поможет: «+1 собеседование в неделю», «срок на месяц позже»', /\+1 собеседование в неделю/.test(resText()) && /Срок на месяц позже/.test(resText()));
+  // ноль кружочками: повторный щелчок по первому кружку -> «0 из 10» -> честно «никогда»
+  q('[data-s-act="ten"][data-p="until.pct"][data-n="1"]').click();
+  check('Первый кружок: «1 из 10»', q('input[data-s="until.pct"]').value === '10' && /1 из 10/.test(q('.ten-txt').textContent));
+  q('[data-s-act="ten"][data-p="until.pct"][data-n="1"]').click();
+  await until(() => q('.s-fix'), 10000);
+  check('Ещё раз по первому кружку: «0 из 10» → «Так не получится никогда»', q('input[data-s="until.pct"]').value === '0' &&
+    /0 из 10/.test(q('.ten-txt').textContent) && /Так не получится никогда/.test(resText()), resText().slice(0, 80));
+  q('[data-s-act="ten"][data-p="until.pct"][data-n="2"]').click();
+  await until(() => big(), 30000);
   const dateIn = q('input[type="date"]');
   dateIn.value = '2020-01-01'; dateIn.dispatchEvent(new w2.Event('change', { bubbles: true }));
   await until(() => q('.s-fix'), 10000);

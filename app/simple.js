@@ -518,7 +518,8 @@ const PASimple = (() => {
   function chanceCtl(P, value) {
     const k = Math.round((Number.isFinite(value) ? value : 0) / 10);
     return `<span class="ten" role="group" aria-label="Как часто, из 10">${Array.from({ length: 10 }, (_, i) =>
-      `<button type="button" data-s-act="ten" data-p="${P}" data-n="${i + 1}" class="${i < k ? 'on' : ''}" aria-label="${i + 1} из 10"></button>`).join('')}</span>
+      `<button type="button" data-s-act="ten" data-p="${P}" data-n="${i + 1}" class="${i < k ? 'on' : ''}" aria-label="${i + 1} из 10"${
+        i === 0 ? ' title="Ещё раз — 0 из 10 (никогда)"' : ''}></button>`).join('')}</span>
       <span class="ten-txt"><b>${tenText(value)}</b> · точнее <input class="pct-in" inputmode="decimal" data-s="${P}" data-num value="${fmtIn(value)}" aria-label="Процент"> %</span>`;
   }
   const histHint = n => `${n} знач. Впишите через пробел, как было в прошлые разы.${n && n < 5 ? ' <b>Данных мало — ответ будет примерный.</b>' : ''}`;
@@ -857,10 +858,13 @@ const PASimple = (() => {
     else if (a === 'close') { if (check(s).items[k]) return; open.delete(`${calc.active}.${k}`); render(); return; }
     else if (a === 'know') getPath(s, b.dataset.p).know = b.dataset.know;
     else if (a === 'ten') {
-      setPath(s, b.dataset.p, +b.dataset.n * 10);
-      syncTen(b.dataset.p, +b.dataset.n * 10);
+      // как звёздочки-оценки: повторный щелчок по единственному закрашенному кружку -> 0 из 10 («никогда»)
+      const cur = getPath(s, b.dataset.p), n = +b.dataset.n;
+      const val = n === 1 && Math.round((Number.isFinite(cur) ? cur : 0) / 10) === 1 ? 0 : n * 10;
+      setPath(s, b.dataset.p, val);
+      syncTen(b.dataset.p, val);
       const inp = $(`input[data-s="${b.dataset.p}"]`);
-      if (inp) inp.value = fmtIn(+b.dataset.n * 10);
+      if (inp) inp.value = fmtIn(val);
       showErrors(check(s)); changed();
       return;
     } else if (a === 'compare') {
