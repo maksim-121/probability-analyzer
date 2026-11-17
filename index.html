@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Анализатор вероятностей</title>
+<meta name="description" content="Вероятности случайных событий методом Монте-Карло: задайте факторы, формулы и условие — получите вероятность с погрешностью.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M7 24V17M13 24V11M19 24V7M25 24V14' stroke='white' stroke-width='3.4' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --card: #ffffff;
+    --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+    --line: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11, 11, 11, 0.10);
+    --s1: #2a78d6; --s2: #eb6834; --band: rgba(42, 120, 214, 0.10); --range: #c3c2b7;
+    --accent: #2a78d6; --accent-ink: #ffffff;
+    --good: #006300; --good-bg: rgba(12, 163, 12, 0.10); --warn-bg: rgba(250, 178, 25, 0.16);
+    --bad: #b3261e; --bad-bg: rgba(208, 59, 59, 0.08);
+    --input: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+      --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+      --line: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+      --s1: #3987e5; --s2: #d95926; --band: rgba(57, 135, 229, 0.16); --range: #4a4a46;
+      --accent: #3987e5; --accent-ink: #ffffff;
+      --good: #0ca30c; --good-bg: rgba(12, 163, 12, 0.14); --warn-bg: rgba(250, 178, 25, 0.14);
+      --bad: #ff8a80; --bad-bg: rgba(255, 138, 128, 0.10);
+      --input: #232322;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --card: #1a1a19;
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+    --line: #2c2c2a; --axis: #383835; --ring: rgba(255, 255, 255, 0.10);
+    --s1: #3987e5; --s2: #d95926; --band: rgba(57, 135, 229, 0.16); --range: #4a4a46;
+    --accent: #3987e5; --accent-ink: #ffffff;
+    --good: #0ca30c; --good-bg: rgba(12, 163, 12, 0.14); --warn-bg: rgba(250, 178, 25, 0.14);
+    --bad: #ff8a80; --bad-bg: rgba(255, 138, 128, 0.10);
+    --input: #232322;
+  }
+
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; }
+  body { background: var(--page); color: var(--text); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; }
+  h1, h2, h3 { margin: 0; font-weight: 650; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+
+  /* --- шапка */
+  .top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between;
+         max-width: 1440px; margin: 0 auto; padding: 20px 16px 8px; }
+  .top h1 { font-size: 22px; }
+  .top p { margin: 2px 0 0; color: var(--text-2); font-size: 14px; }
+  .top-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .badge { font-size: 12px; color: var(--text-2); background: var(--warn-bg); padding: 2px 8px; border-radius: 99px; }
+
+  /* --- раскладка */
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; max-width: 1440px; margin: 0 auto; padding: 8px 16px 32px; }
+  @media (min-width: 1100px) { .layout { grid-template-columns: minmax(420px, 5fr) minmax(0, 7fr); align-items: start; } }
+  .pane { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; min-width: 0; }
+  .card h3 { font-size: 16px; margin-bottom: 4px; }
+  .sub, .note, .hint { color: var(--text-2); font-size: 13px; margin: 0 0 8px; }
+  .note { margin: 8px 0 0; }
+  .hint { margin: 6px 0 0; }
+  .empty { color: var(--muted); font-size: 13px; margin: 0; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .btn.small { font-size: 13px; padding: 4px 10px; }
+  .csv-row { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+  .csv-row .hint { margin: 0; }
+  .csv-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 8px; border-radius: 8px; background: var(--warn-bg); }
+  .csv-pick .hint { margin: 0; }
+  textarea.dragging { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  /* --- этап 4: зависимости */
+  .dep { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); }
+  .dep select { flex: 1; font-size: 14px; color: var(--text); }
+  .dep-note { flex: 1; font-size: 13px; color: var(--text-2); }
+  .item.dependent { border-left: 3px solid var(--accent); }
+  .cases { display: flex; flex-direction: column; gap: 8px; }
+  .case { border: 1px dashed var(--line); border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+  .case-head { font-weight: 600; font-size: 14px; flex: none; min-width: 9.5em; }
+  .case .row select { flex: 1; }
+  .warn-box { background: var(--warn-bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+  /* --- редактор */
+  .step h2 { font-size: 15px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px; }
+  .step h2 span { font-weight: 400; color: var(--text-2); font-size: 13px; }
+  .step-num { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+              background: var(--accent); color: var(--accent-ink); font-size: 12px; }
+  .items { display: flex; flex-direction: column; gap: 10px; }
+  .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
+  .row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+  input, select, textarea { background: var(--input); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; min-width: 0; }
+  input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+  textarea { width: 100%; resize: vertical; }
+  .name { width: 9.5em; font-weight: 600; flex: none; }
+  .row select { flex: 1; }
+  .formula { flex: 1; }
+  .label { flex: 1; font-size: 13px; color: var(--text-2); }
+  .unit { width: 5.5em; flex: none; font-size: 13px; }
+  .eq { color: var(--muted); font-weight: 600; }
+  .title-input { width: 100%; font-size: 17px; font-weight: 650; border-color: transparent; background: transparent; padding-left: 4px; }
+  .desc-input { width: 100%; font-size: 13px; color: var(--text-2); border-color: transparent; background: transparent; padding-left: 4px; }
+  .title-input:hover, .desc-input:hover { border-color: var(--line); }
+  .fields { display: flex; flex-wrap: wrap; gap: 8px; }
+  .field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--text-2); }
+  .field input { width: 7.5em; font-size: 15px; color: var(--text); }
+  .ttable { border-collapse: collapse; }
+  .ttable th { font-size: 12px; font-weight: 400; color: var(--text-2); text-align: left; padding: 0 6px 2px 0; }
+  .ttable td { padding: 2px 6px 2px 0; }
+  .ttable input { width: 6.5em; }
+  .share { font-size: 13px; color: var(--text-2); font-variant-numeric: tabular-nums; min-width: 4.5em; text-align: right; }
+  .shape { display: flex; align-items: flex-end; gap: 10px; font-size: 12px; color: var(--text-2); min-height: 36px; }
+  .shape svg { flex: none; }
+  .bad { color: var(--bad); }
+  button { cursor: pointer; }
+  button:disabled { cursor: not-allowed; opacity: .45; }
+  .btn { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 12px; }
+  .btn:hover:not(:disabled) { border-color: var(--axis); }
+  .icon { border: 0; background: transparent; color: var(--muted); padding: 4px 6px; border-radius: 6px; flex: none; }
+  .icon:hover:not(:disabled) { color: var(--text); background: var(--line); }
+  .link { border: 0; background: transparent; color: var(--accent); padding: 4px 0; align-self: flex-start; }
+  .add { margin-top: 8px; }
+  details.help { font-size: 14px; }
+  details.help summary { cursor: pointer; font-weight: 600; }
+  details.help code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--surface); border: 1px solid var(--line);
+                      border-radius: 4px; padding: 0 4px; }
+  details.help ul { padding-left: 18px; margin: 8px 0 0; }
+  details.help li { margin: 3px 0; }
+
+  /* --- панель запуска */
+  .runbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; position: sticky; top: 0; z-index: 2; }
+  .runbar .field select, .runbar .field input { font-size: 15px; color: var(--text); }
+  .runbar #seed { width: 9em; }
+  .seed { display: flex; gap: 4px; }
+  .primary { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 8px 18px; font-weight: 600; margin-left: auto; }
+  progress { width: 100%; height: 6px; accent-color: var(--accent); }
+  .error { background: var(--bad-bg); color: var(--bad); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0; }
+  .stale-banner { background: var(--warn-bg); border-radius: 10px; padding: 8px 12px; font-size: 14px; margin: 0; }
+  #results.stale #results-body { opacity: .45; }
+
+  /* --- результаты */
+  .hero-label { color: var(--text-2); font-size: 14px; }
+  .hero-value { font-size: 56px; font-weight: 650; line-height: 1.1; margin: 4px 0; letter-spacing: -0.01em; }
+  .hero-sub { color: var(--text-2); font-size: 14px; }
+  .exact { margin-top: 12px; font-size: 13px; padding: 8px 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--line); }
+  .exact.good { background: var(--good-bg); border-color: transparent; }
+  .exact.good b:first-child { color: var(--good); }
+  .exact.warn { background: var(--warn-bg); border-color: transparent; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-top: 8px; }
+  .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  .tile-label { font-size: 13px; color: var(--text-2); }
+  .tile-value { font-size: 24px; font-weight: 650; }
+  .tile-sub { font-size: 12px; color: var(--muted); }
+  ul.plain { margin: 6px 0 0; padding-left: 18px; }
+  ul.plain li { margin: 4px 0; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .dotk { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .sw.s1, .dotk.s1 { background: var(--s1); } .sw.s2, .dotk.s2 { background: var(--s2); }
+  .chart { width: 100%; min-height: 60px; }
+  .chart svg { display: block; overflow: visible; }
+  svg .grid { stroke: var(--line); stroke-width: 1; }
+  svg .axis { stroke: var(--axis); stroke-width: 1; }
+  svg .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  svg .tick.strong { fill: var(--text-2); font-weight: 600; }
+  svg .halo { paint-order: stroke; stroke: var(--card); stroke-width: 4px; stroke-linejoin: round; }
+  svg .lbl { fill: var(--text); font-size: 13px; font-weight: 600; }
+  svg .s1 { fill: var(--s1); } svg .s2 { fill: var(--s2); }
+  svg .dot { stroke: var(--card); stroke-width: 2; }
+  svg .line { fill: none; stroke: var(--s1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+  svg .band { fill: var(--band); }
+  svg .ref { stroke: var(--text-2); stroke-width: 1; }
+  svg .base { stroke: var(--text-2); stroke-width: 1; }
+  svg .range { stroke: var(--range); stroke-width: 6; stroke-linecap: round; }
+  svg .hit { fill: transparent; }
+  svg .hit:hover { fill: var(--ring); }
+  .shape svg .axis { stroke: var(--line); }
+  .calc { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-top: 8px; font-size: 14px; }
+  .calc input { width: 5.5em; margin: 0 4px; }
+  .calc output { font-weight: 650; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  .pct-table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 14px; }
+  .pct-table th { font-weight: 400; color: var(--text-2); font-size: 12px; }
+  .pct-table th, .pct-table td { padding: 4px 8px; text-align: right; border-bottom: 1px solid var(--line); }
+  .cmp { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 14px; margin-top: 4px; }
+  .cmp th { font-weight: 400; color: var(--text-2); font-size: 12px; text-align: right; }
+  .cmp th, .cmp td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  .cmp td { text-align: right; white-space: nowrap; }
+  .cmp td:first-child { text-align: left; white-space: normal; color: var(--text-2); }
+  .cmp td:nth-child(2) { font-weight: 650; }
+  .verdict { margin: 10px 0 0; font-size: 14px; }
+  .runinfo { color: var(--muted); font-size: 12px; margin: 0; }
+  .tip { position: fixed; z-index: 10; pointer-events: none; white-space: pre-line; max-width: 320px;
+         background: var(--text); color: var(--page); font-size: 13px; padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
+  footer { max-width: 1440px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
+  footer a { color: var(--text-2); }
+  @media (max-width: 520px) {
+    .hero-value { font-size: 44px; }
+    .name { width: 7.5em; }
+    .row { flex-wrap: wrap; }
+    .formula { flex-basis: 100%; order: 5; }
+    .row .icon { margin-left: auto; }
+  }
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>Анализатор вероятностей</h1>
+    <p>Опишите, что может пойти по-разному, — Монте-Карло проиграет это миллион раз и посчитает шансы.</p>
+  </div>
+  <div class="top-actions">
+    <label class="field">Шаблон <select id="tpl" aria-label="Шаблон"></select></label>
+    <span class="badge" id="tpl-mod" hidden>изменён</span>
+    <button class="btn" id="btn-reset" title="Вернуть шаблон к исходному виду">Сбросить</button>
+    <button class="btn" id="btn-new">Новый</button>
+    <button class="btn" id="btn-open" title="Открыть сценарий из файла .json">Открыть…</button>
+    <button class="btn" id="btn-save" title="Сохранить сценарий в файл .json">Сохранить</button>
+    <input type="file" id="open-file" accept=".json,application/json" hidden>
+    <input type="file" id="csv-file" accept=".csv,.txt,text/csv,text/plain" hidden>
+  </div>
+</header>
+
+<main class="layout">
+  <!-- ============================== Сценарий ============================== -->
+  <section class="pane" id="scenario" aria-label="Сценарий">
+    <div class="card">
+      <input id="sc-name" class="title-input" data-path="name" data-kind="text" aria-label="Название сценария">
+      <textarea id="sc-desc" class="desc-input" data-path="description" data-kind="text" rows="2" aria-label="Описание"></textarea>
+    </div>
+
+    <div class="card step">
+      <h2><span class="step-num">1</span>Случайные факторы <span>то, что может пойти по-разному</span></h2>
+      <div class="items" id="factors"></div>
+      <button class="btn add" data-act="add-factor">+ Фактор</button>
+    </div>
+
+    <div class="card step">
+      <h2><span class="step-num">2</span>Расчётные величины <span>формулы от факторов, по порядку сверху вниз</span></h2>
+      <div class="items" id="derived"></div>
+      <button class="btn add" data-act="add-derived">+ Величина</button>
+    </div>
+
+    <div class="card step">
+      <h2><span class="step-num">3</span>Итог <span>главное число, которое нас интересует</span></h2>
+      <div class="items" id="result-edit"></div>
+    </div>
+
+    <div class="card step">
+      <h2><span class="step-num">4</span>Событие <span>условие «да / нет»; его вероятность — главный ответ</span></h2>
+      <div class="items" id="event-edit"></div>
+    </div>
+
+    <details class="card help">
+      <summary>Как писать формулы</summary>
+      <ul>
+        <li>Имена — как у факторов и величин выше: <code>Иван</code>, <code>Обед</code>. Регистр не важен, пробелы в именах нельзя (<code>Обед_Марии</code>).</li>
+        <li>Арифметика: <code>+ − * / ^</code> и скобки. Дробные числа — через точку: <code>0.5</code>.</li>
+        <li>Сравнения: <code>&lt; &lt;= &gt; &gt;= = &lt;&gt;</code>. Истина = 1, ложь = 0.</li>
+        <li>Логика: <code>и</code>, <code>или</code>, <code>не</code> — например <code>Задержка &lt;= 5 и не Дождь</code>.</li>
+        <li><code>max(a; b; …)</code> — наибольшее (кто пришёл последним), <code>min(…)</code> — наименьшее.</li>
+        <li><code>если(условие; да; нет)</code> — например <code>если(Занята; Затягивание; 0)</code>.</li>
+        <li>Ещё: <code>abs</code>, <code>round</code>, <code>floor</code>, <code>ceil</code>, <code>sqrt</code> (или <code>модуль</code>, <code>округл</code>, <code>вниз</code>, <code>вверх</code>, <code>корень</code>).</li>
+        <li>Аргументы разделяются <code>;</code> или <code>,</code>. При переименовании фактора формулы обновляются сами.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- ============================== Результат ============================== -->
+  <section class="pane" id="results" aria-label="Результат" aria-live="polite">
+    <div class="card runbar">
+      <label class="field">Прогонов
+        <select id="n">
+          <option value="10000">10 000</option>
+          <option value="100000">100 000</option>
+          <option value="1000000" selected>1 000 000</option>
+          <option value="5000000">5 000 000</option>
+        </select>
+      </label>
+      <label class="field">Сид (повторяемость)
+        <span class="seed"><input id="seed" inputmode="numeric" value="20261117">
+        <button class="btn" id="seed-rand" title="Случайный сид" aria-label="Случайный сид">🎲</button></span>
+      </label>
+      <button class="primary" id="run" title="Ctrl + Enter">▶ Рассчитать</button>
+      <progress id="progress" max="1" value="0" hidden></progress>
+    </div>
+    <p class="error" id="error" hidden></p>
+    <p class="stale-banner" id="stale" hidden>Сценарий изменён — нажмите «Рассчитать», чтобы обновить результат.</p>
+    <div id="results-body" class="pane"></div>
+  </section>
+</main>
+
+<footer>
+  Генератор с сидом (xoshiro128**): одинаковый сид — одинаковый результат. Движок сверяется с Python-эталоном —
+  <a href="tests/selftest.html">самопроверка движка</a>.
+</footer>
+<div class="tip" id="tip" hidden></div>
+
+<script src="engine/engine.js"></script>
+<script src="engine/templates.js"></script>
+<script src="app/csv.js"></script>
+<script src="app/charts.js"></script>
+<script src="app/app.js"></script>
+</body>
+</html>

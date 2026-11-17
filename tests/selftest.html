@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Самопроверка движка…</title>
+<style>
+  :root { --bg: #fafaf7; --fg: #1d1d1b; --muted: #6b6b66; --ok: #1f7a3a; --bad: #b3261e; --line: #e2e2dc; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #161615; --fg: #ecece6; --muted: #9a9a93; --ok: #5fc27e; --bad: #ff8a80; --line: #2c2c29; }
+  }
+  body { background: var(--bg); color: var(--fg); font: 15px/1.5 system-ui, sans-serif; margin: 0; padding: 24px 16px; }
+  main { max-width: 900px; margin: 0 auto; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sum { color: var(--muted); margin-bottom: 20px; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+  td:first-child { width: 28px; font-weight: 700; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .d { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Самопроверка движка</h1>
+  <div class="sum" id="sum">Идёт проверка…</div>
+  <table id="out"></table>
+</main>
+<script src="../engine/engine.js"></script>
+<script src="../engine/templates.js"></script>
+<script src="vectors.js"></script>
+<script>
+'use strict';
+const results = [];
+function check(name, ok, detail = '') { results.push({ name, ok: !!ok, detail }); }
+function tryCheck(name, fn) {
+  try { const r = fn(); check(name, r === undefined ? true : r.ok, r && r.detail); }
+  catch (e) { check(name, false, 'исключение: ' + e.message); }
+}
+const same = (a, b) => (a !== a && b !== b) || a === b;
+const near = (a, b, rel = 1e-12) => same(a, b) || Math.abs(a - b) <= rel * Math.max(1, Math.abs(a), Math.abs(b));
+const fmt = x => (typeof x === 'number' ? +x.toPrecision(12) : x);
+function arrNear(a, b, rel) {
+  if (a.length !== b.length) return { ok: false, detail: `длина ${a.length} ≠ ${b.length}` };
+  for (let i = 0; i < a.length; i++)
+    if (!near(a[i], b[i], rel)) return { ok: false, detail: `позиция ${i}: JS ${fmt(a[i])}, Python ${fmt(b[i])}` };
+  return { ok: true };
+}
+const throwsMC = fn => { try { fn(); return false; } catch (e) { return e instanceof MC.MCError; } };
+
+// ---------------------------------------------------------------- 1. Сверка с Python
+const V = MC_VECTORS;
+
+V.rng.forEach(v => tryCheck(`Генератор, сид ${v.seed}: совпадает с Python`, () => {
+  const a = new MC.Rng(v.seed), b = new MC.Rng(v.seed);
+  const r1 = arrNear(v.u32.map(() => a.nextU32()), v.u32, 0);
+  if (!r1.ok) return r1;
+  return arrNear(v.uniform.map(() => b.uniform()), v.uniform, 0);
+}));
+
+V.dists.forEach(v => tryCheck(`Распределение ${MC.DIST_NAMES[v.spec.type]} ${JSON.stringify(v.spec).slice(0, 60)}`, () => {
+  const d = MC.prepareDist(v.spec, 'тест'), rng = new MC.Rng(v.seed);
+  const r = arrNear(v.samples.map(() => d.sample(rng)), v.samples, v.spec.type === 'normal' ? 1e-12 : 0);
+  if (!r.ok) return r;
+  return { ok: near(d.mean, v.mean) && near(d.sd, v.sd), detail: `среднее ${fmt(d.mean)} / ${fmt(v.mean)}` };
+}));
+
+tryCheck(`Формулы: ${V.formulas.length} примеров совпадают с Python`, () => {
+  for (const f of V.formulas) {
+    const got = MC.evalFormula(f.src, f.vars);
+    if (!same(got, f.value)) return { ok: false, detail: `«${f.src}»: JS ${got}, Python ${f.value}` };
+  }
+  return { ok: true };
+});
+
+tryCheck(`Ошибочные формулы: все ${V.badFormulas.length} отклонены`, () => {
+  for (const src of V.badFormulas)
+    if (!throwsMC(() => MC.evalFormula(src, { a: 1, b: 2, c: 3 }))) return { ok: false, detail: `пропущена «${src}»` };
+  return { ok: true };
+});
+
+V.broken.forEach(b => check(`Сломанный сценарий отклонён: ${b.what}`, throwsMC(() => MC.compile(b.scenario))));
+
+V.runs.forEach(v => tryCheck(`Прогон «${v.scenario.name}» (${v.n} прогонов, сид ${v.seed}) = Python`, () => {
+  const model = MC.compile(v.scenario);
+  const run = MC.run(model, { n: v.n, seed: v.seed });
+  const s = MC.summarize(run);
+  const errs = [];
+  if (v.eventCount !== null && s.event.count !== v.eventCount) errs.push(`событие ${s.event.count} ≠ ${v.eventCount}`);
+  for (const k of ['mean', 'sd', 'min', 'max']) if (!near(s.result[k], v[k], 1e-10)) errs.push(`${k} ${fmt(s.result[k])} ≠ ${fmt(v[k])}`);
+  for (const q of Object.keys(v.pct)) if (!near(s.result.pct[q], v.pct[q], 1e-10)) errs.push(`P${q}`);
+  if (!arrNear(Array.from(run.result.subarray(0, 10)), v.first, 1e-12).ok) errs.push('первые итоги');
+  if (!near(run.result[v.n - 1], v.last, 1e-12)) errs.push('последний итог');
+  v.cols.forEach((c, k) => { if (!arrNear(Array.from(run.cols[k].subarray(0, 5)), c, 1e-12).ok) errs.push(`столбец ${k}`); });
+  // чувствительность
+  const sens = MC.sensitivity(run, { maxRows: v.sens.rows });
+  if (!near(sens.base.mean, v.sens.base.mean, 1e-10)) errs.push('торнадо: база');
+  for (const it of v.sens.items) {
+    const js = sens.items.find(x => x.name === it.name);
+    for (const side of ['low', 'high']) {
+      if (!near(js[side].value, it[side].value, 1e-12) || !near(js[side].mean, it[side].mean, 1e-10) ||
+          (it[side].p !== null && js[side].p !== it[side].p)) errs.push(`торнадо ${it.name} ${side}`);
+    }
+  }
+  // точный перебор
+  const ex = MC.exact(model);
+  if ((ex === null) !== (v.exact === null)) errs.push('точный перебор: доступность');
+  else if (ex && (!near(ex.p, v.exact.p) || !near(ex.mean, v.exact.mean) || !near(ex.sd, v.exact.sd) || ex.combos !== v.exact.combos))
+    errs.push(`точный перебор: ${fmt(ex.p)} ≠ ${fmt(v.exact.p)}`);
+  return { ok: !errs.length, detail: errs.slice(0, 4).join('; ') };
+}));
+
+// версия «без связей» (этап 4): должна совпасть с Python до последнего числа
+const canon = x => JSON.stringify(x, (k, v) => (v && typeof v === 'object' && !Array.isArray(v)
+  ? Object.keys(v).sort().reduce((o, key) => { o[key] = v[key]; return o; }, {}) : v));
+(V.independent || []).forEach(t => tryCheck(`Версия без связей «${t.scenario.name}» = Python`, () => {
+  const js = canon(MC.independentVersion(t.scenario)), py = canon(t.independent);
+  let k = 0;
+  while (k < js.length && js[k] === py[k]) k++;
+  return { ok: js === py, detail: js === py ? '' : `расхождение: JS «${js.slice(k, k + 40)}», Python «${py.slice(k, k + 40)}»` };
+}));
+
+tryCheck('Сколько прогонов нужно для заданной точности = Python', () => {
+  for (const r of V.runsNeeded) if (MC.runsNeeded(r.p, r.half) !== r.n) return { ok: false, detail: `p=${r.p}` };
+  return { ok: true };
+});
+
+// ---------------------------------------------------------------- 2. Монте-Карло против точного ответа
+const meeting = MC_TEMPLATES.find(t => t.id === 'meeting');
+const N = 1000000;
+let speed = '';
+tryCheck(`Совещание, ${N.toLocaleString('ru')} прогонов: P(вовремя) ≈ 0.54 (точный ответ)`, () => {
+  const t0 = performance.now();
+  const run = MC.run(MC.compile(meeting), { n: N, seed: 20261117 });
+  const t1 = performance.now();
+  const s = MC.summarize(run);
+  const t2 = performance.now();
+  speed = `${N.toLocaleString('ru')} прогонов за ${((t1 - t0) / 1000).toFixed(2)} с (+ статистика ${((t2 - t1) / 1000).toFixed(2)} с)`;
+  const se = Math.sqrt(0.54 * 0.46 / N);
+  const d = s.event.p - 0.54;
+  return { ok: Math.abs(d) <= 4 * se,
+    detail: `MC ${(s.event.p * 100).toFixed(3)}% ± ${((s.event.hi - s.event.p) * 100).toFixed(3)}%, отклонение ${(d / se).toFixed(2)} SE; ${speed}` };
+});
+
+tryCheck('Два кубика: точный перебор = 6/36, среднее 7', () => {
+  const ex = MC.exact(MC.compile(V.runs.find(r => r.scenario.name === 'Два кубика').scenario));
+  return { ok: near(ex.p, 6 / 36, 1e-14) && near(ex.mean, 7, 1e-14) && ex.combos === 36, detail: `${ex.p}` };
+});
+
+tryCheck('Торнадо: свободная переговорка даёт P ≈ 0.72 (0.8 · 0.9 · 1)', () => {
+  const t0 = performance.now();
+  const run = MC.run(MC.compile(meeting), { n: 200000, seed: 1 });
+  const sens = MC.sensitivity(run);
+  const busy = sens.items.find(i => i.name === 'Занята');
+  const se = Math.sqrt(0.72 * 0.28 / sens.rows);
+  return { ok: Math.abs(busy.low.p - 0.72) <= 4 * se && busy.high.p < 0.001,
+    detail: `свободна ${(busy.low.p * 100).toFixed(2)}%, занята ${(busy.high.p * 100).toFixed(2)}%, ` +
+            `главный фактор: ${sens.items[0].name}; ${((performance.now() - t0) / 1000).toFixed(2)} с` };
+});
+
+// ---------------------------------------------------------------- 3. Служебное
+tryCheck('Прогон кусочками = прогон целиком (нужно для страницы без зависаний)', () => {
+  const model = MC.compile(meeting);
+  const whole = MC.run(model, { n: 50000, seed: 9 });
+  const parts = MC.createRun(model, { n: 50000, seed: 9 });
+  while (!parts.step(777));
+  for (let i = 0; i < 50000; i++) if (whole.result[i] !== parts.result[i]) return { ok: false, detail: `строка ${i}` };
+  return { ok: JSON.stringify(whole.convergence) === JSON.stringify(parts.convergence) };
+});
+
+tryCheck('Сходимость: последняя точка = итоговый ответ', () => {
+  const run = MC.run(MC.compile(meeting), { n: 12345, seed: 2 });
+  const s = MC.summarize(run), last = run.convergence[run.convergence.length - 1];
+  return { ok: last.n === 12345 && last.p === s.event.p && run.convergence.length >= 5,
+    detail: run.convergence.map(c => c.n).join(', ') };
+});
+
+tryCheck('Гистограмма: кубики — 11 столбиков, сумма долей = 1', () => {
+  const run = MC.run(MC.compile(V.runs.find(r => r.scenario.name === 'Два кубика').scenario), { n: 100000, seed: 4 });
+  const h = MC.histogram(MC.summarize(run).result.sorted);
+  const total = h.bins.reduce((a, b) => a + b.p, 0);
+  return { ok: h.discrete && h.bins.length === 11 && near(total, 1, 1e-12), detail: `${h.bins.length} столбиков` };
+});
+
+tryCheck('Гистограмма: непрерывный итог — 40 интервалов + хвосты', () => {
+  const run = MC.run(MC.compile(V.runs.find(r => r.scenario.name === 'Дорога на работу').scenario), { n: 100000, seed: 4 });
+  const h = MC.histogram(MC.summarize(run).result.sorted);
+  const total = h.bins.reduce((a, b) => a + b.p, 0) + h.below + h.above;
+  return { ok: !h.discrete && h.bins.length === 40 && near(total, 1, 1e-9) && h.below > 0 && h.above > 0,
+    detail: `хвосты ${(h.below * 100).toFixed(2)}% / ${(h.above * 100).toFixed(2)}%` };
+});
+
+check('Сценарий с непрерывным фактором не перебирается точно', MC.exact(MC.compile(meeting)) === null);
+check('Неверный сид отклонён', throwsMC(() => MC.run(MC.compile(meeting), { n: 10, seed: -1 })));
+check('Ноль прогонов отклонён', throwsMC(() => MC.run(MC.compile(meeting), { n: 0, seed: 1 })));
+tryCheck('Понятный текст ошибки при опечатке', () => {
+  const sc = JSON.parse(JSON.stringify(meeting));
+  sc.event.formula = 'Задерджка <= 5';
+  try { MC.compile(sc); return { ok: false }; }
+  catch (e) { return { ok: e.message.includes('неизвестное имя «Задерджка»'), detail: e.message }; }
+});
+
+// ---------------------------------------------------------------- итог
+const passed = results.filter(r => r.ok).length;
+const failed = results.filter(r => !r.ok);
+document.title = (failed.length ? `FAIL ${passed}/${results.length}: ${failed[0].name} — ${failed[0].detail}`
+                                 : `PASS ${passed}/${results.length}`) + ` | ${speed}`;
+document.getElementById('sum').textContent =
+  `${passed} из ${results.length} проверок пройдено. ${speed}`;
+document.getElementById('out').innerHTML = results.map(r =>
+  `<tr><td class="${r.ok ? 'ok' : 'bad'}">${r.ok ? '✓' : '✗'}</td><td>${r.name}` +
+  (r.detail ? `<div class="d">${r.detail.replace(/</g, '&lt;')}</div>` : '') + '</td></tr>').join('');
+</script>
+</body>
+</html>
