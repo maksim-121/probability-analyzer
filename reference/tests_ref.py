@@ -12,8 +12,8 @@ import math
 import unittest
 
 import engine_ref as E
-from cases import (ATTEMPTS, BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, GYM, MEETING, MEETING_DISCRETE, RAIN,
-                   RAIN_DISCRETE, TEMPLATES)
+from cases import (ATTEMPTS, BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, GYM, JOB, JOB_FIXED, MEETING,
+                   MEETING_DISCRETE, RAIN, RAIN_DISCRETE, TEMPLATES)
 
 
 def close_mc(test, est, exact, se, k=4.0, what=""):
@@ -461,6 +461,48 @@ class TestComposite(unittest.TestCase):
         for spec in bad:
             with self.assertRaises(E.MCError, msg=str(spec)):
                 E.prepare_dist(spec, "тест")
+
+
+class TestUntil(unittest.TestCase):
+    """«Получится ли до срока»: число попыток за период случайное (repeat с timesDist) + шаги до цели."""
+
+    def test_times_dist_constant_equals_times(self):
+        a = E.prepare_dist({"type": "repeat", "timesDist": {"type": "uniform", "min": 3, "max": 3},
+                            "dist": {"type": "yesno", "p": 0.4}}, "тест")
+        b = E.prepare_dist({"type": "repeat", "times": 3, "dist": {"type": "yesno", "p": 0.4}}, "тест")
+        r1, r2 = E.Rng(5), E.Rng(5)
+        # uniform(3,3) тратит одно случайное число, поэтому сравниваем распределения, а не потоки
+        n = 40_000
+        xs = [a.sample(r1) for _ in range(n)]
+        close_mc(self, sum(1 for x in xs if x == 0) / n, 0.6 ** 3, math.sqrt(0.216 * 0.784 / n), what="P(0 удач из 3)")
+        self.assertAlmostEqual(a.mean, b.mean)
+
+    def test_times_dist_rounding(self):
+        # «обычно 2, от 1 до 4» -> целые 1…4; среднее число попыток ≈ (1 + 2 + 4) / 3 (округление почти не сдвигает)
+        d = E.prepare_dist({"type": "repeat", "timesDist": {"type": "triangular", "min": 1, "mode": 2, "max": 4},
+                            "dist": {"type": "uniform", "min": 1, "max": 1}}, "тест")
+        rng = E.Rng(2)
+        xs = [d.sample(rng) for _ in range(20_000)]
+        self.assertTrue(set(xs) <= {1.0, 2.0, 3.0, 4.0})
+        self.assertAlmostEqual(sum(xs) / len(xs), 7 / 3, delta=0.03)
+
+    def test_job_fixed_closed_form(self):
+        m = E.compile_scenario(JOB_FIXED)
+        _, res, ev = E.run(m, 40_000, 3)
+        p = 1 - 0.9 ** 12
+        close_mc(self, sum(ev) / 40_000, p, math.sqrt(p * (1 - p) / 40_000), what="оффер за 6 недель")
+        # среднее число недель до первого оффера: шанс за неделю q = 1 − 0,9² = 0,19 -> 1 / 0,19
+        close_mc(self, sum(res) / len(res), 1 / 0.19, math.sqrt((1 - 0.19) / 0.19 ** 2 / 40_000), what="недель в среднем")
+
+    def test_job_random_rate(self):
+        m = E.compile_scenario(JOB)
+        _, res, ev = E.run(m, 20_000, 4)
+        self.assertTrue(0.6 < sum(ev) / 20_000 < 0.9)
+
+    def test_bad_times_dist(self):
+        with self.assertRaises(E.MCError):
+            E.prepare_dist({"type": "repeat", "timesDist": {"type": "uniform", "min": 3, "max": 1},
+                            "dist": {"type": "yesno", "p": 0.4}}, "тест")
 
 
 if __name__ == "__main__":

@@ -279,8 +279,35 @@ async function until(fn, ms = 20000) {
   // 18. стартовый экран
   await goSimple('#simple=new');
   try { w2.localStorage.clear(); } catch (e) {}
-  check('Простой режим: «Какая у вас ситуация?» — 4 схемы и 7 примеров',
-    qa('.scheme').length === 4 && qa('.chip').length === 7 && /Какая у вас ситуация/.test(q('#s-editor').textContent));
+  check('Простой режим: «Что вы хотите узнать?» — поле вопроса, 10 похожих вопросов, 5 схем',
+    !!q('#s-q') && qa('.chip').length === 10 && qa('.scheme').length === 5 && /Что вы хотите узнать/.test(q('#s-editor').textContent));
+
+  // 18а. вопрос своими словами: «какая вероятность найти новую работу до нового года»
+  q('#s-q').value = 'какая вероятность найти новую работу до нового года';
+  q('#s-ask').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+  await until(() => big() && ideasReady(), 60000);
+  check('Вопрос про работу: «похоже, вы ищете работу», вопросы на языке темы',
+    /вы ищете работу/.test(q('.s-say').textContent) && /Сколько собеседований бывает за неделю/.test(q('#s-editor').textContent) &&
+    /заканчивается оффером/.test(q('#s-editor').textContent), q('.s-say') && q('.s-say').textContent);
+  check('Срок понят как 31 декабря, подсказка «не знаете?» есть', q('input[type="date"]').value.endsWith('-12-31') && !!q('.s-tip'),
+    q('input[type="date"]').value);
+  check('Ответ: «N из 100 … найдёте работу» и «чтобы найти работу … собеседований — примерно N в неделю»',
+    / из 100/.test(big()) && /найдёте работу/.test(q('.s-answer').textContent) && /Чтобы найти работу .* собеседований — примерно \d+ в неделю/.test(resText()),
+    (resText().match(/Чтобы найти[^.]*\./) || [''])[0]);
+  check('Что поможет: «+1 собеседование в неделю», «срок на месяц позже»', /\+1 собеседование в неделю/.test(resText()) && /Срок на месяц позже/.test(resText()));
+  const dateIn = q('input[type="date"]');
+  dateIn.value = '2020-01-01'; dateIn.dispatchEvent(new w2.Event('change', { bubbles: true }));
+  await until(() => q('.s-fix'), 10000);
+  check('Срок в прошлом: «Дата срока уже прошла»', /Дата срока уже прошла/.test(resText()));
+  q('[data-s-act="change-scheme"]').click();
+  q('#s-q').value = 'будет ли завтра снег';
+  q('#s-ask').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
+  check('Непонятный вопрос: честно «Не понял, как посчитать» и выбор схем', /Не понял, как посчитать/.test(q('#s-editor').textContent) && qa('.scheme').length === 5);
+  q('[data-s-act="ask"][data-q="Похудею ли до 80 кг к лету?"]').click();
+  await until(() => big(), 60000);
+  check('Похожий вопрос кнопкой: «Похудею ли до 80 кг к лету?» → цель 80 кг, срок 1 июня', /вы худеете/.test(q('.s-say').textContent) &&
+    q('[data-s="goal.target"]').value === '80' && /-06-01$/.test(q('input[type="date"]').value), q('input[type="date"]') && q('input[type="date"]').value);
+  q('#s-new').click();
   check('Стартовый экран: режим специалиста скрыт, кнопки «Сравнить» нет',
     d2.body.dataset.mode === 'simple' && q('#expert-view').hidden && !q('[data-s-act="compare"]'));
 
@@ -300,7 +327,7 @@ async function until(fn, ms = 20000) {
   await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
   check('«Знаю точно» + «может случиться» (5 из 10): 50 из 100', /^50 из 100/.test(big()), big());
   check('Кружочки: «5 из 10», в поле 50 %', /5 из 10/.test(q('.ten-txt').textContent) && q('input[data-s="items.1.v.pct"]').value === '50');
-  check('Запас в человеческих единицах: «закладывайте 40 мин»', /закладывайте 40 мин/.test(resText()), (resText().match(/Чтобы[^.]*\./) || [''])[0]);
+  check('Запас в человеческих единицах: «чтобы успеть … закладывайте 40 мин»', /Чтобы успеть в 9 случаях из 10 — закладывайте 40 мин/.test(resText()), (resText().match(/Чтобы[^.]*\./) || [''])[0]);
 
   // 20. ошибки — по-человечески
   inp(q('[data-s="items.1.v.from"]'), '20');
@@ -343,7 +370,7 @@ async function until(fn, ms = 20000) {
 
   // 26. «иду к цели»: жим (вверх), похудение (вниз), здравый смысл
   await goSimple('#simple=bench'); await ready();
-  check('Жим: «скорее всего дойдёте за N недель (≈ M мес.)»', /дойдёте за \d+ недел\S* \(≈ [\d,]+ мес\.\)/.test(resText()), (resText().match(/Скорее всего дойдёте[^.]*\./) || [''])[0]);
+  check('Жим: «скорее всего дойдёте за N недель (≈ M мес.)»', /дойдёте до цели за \d+ недел\S* \(≈ [\d,]+ мес\.\)/.test(resText()), (resText().match(/Скорее всего дойдёте[^.]*\./) || [''])[0]);
   check('Жим: гистограмма по целым неделям (подсказки «30», а не «30,4 … 31,5»)',
     qa('#s-hist .hit').length > 5 && qa('#s-hist .hit').every(r => /Срок: \d+(–\d+)? недель/.test(r.getAttribute('data-tip'))));
   q('[data-s-act="ten"][data-p="goal.setback.pct"][data-n="10"]').click();
@@ -368,7 +395,7 @@ async function until(fn, ms = 20000) {
   // 29. «Новая ситуация» — снова выбор схемы
   q('[data-mode-btn="simple"]').click();
   q('#s-new').click();
-  check('«Новая ситуация»: снова «Какая у вас ситуация?»', qa('.scheme').length === 4);
+  check('«Новая ситуация»: снова «Что вы хотите узнать?»', qa('.scheme').length === 5 && !!q('#s-q'));
 
   const passed = out.filter(r => r.ok).length, fail = out.find(r => !r.ok);
   document.title = (fail ? `FAIL ${passed}/${out.length}: ${fail.name} — ${fail.detail}` : `PASS ${passed}/${out.length}`) + ' | UI';

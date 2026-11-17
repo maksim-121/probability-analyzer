@@ -196,6 +196,20 @@
       }
       case 'repeat': {
         // Сумма N независимых значений одного распределения. С «да / нет» внутри — число удачных попыток из N.
+        // N может быть случайным (timesDist — «собеседований в неделю: 1–4»): сначала разыгрываем N
+        // (округляем до целого: floor(x + 0,5), не меньше 0), потом N раз внутреннее значение.
+        if (d.timesDist !== undefined) {
+          const td = prepareDist(d.timesDist, `${who}, сколько повторов`);
+          const inner = prepareDist(d.dist, `${who}, одно повторение`);
+          const sample = rng => {
+            const n = Math.min(MAX_REPEAT, Math.max(0, Math.floor(td.sample(rng) + 0.5)));
+            let s = 0;
+            for (let k = 0; k < n; k++) s += inner.sample(rng);
+            return s;
+          };
+          return { type: 'repeat', sample, support: null, mean: td.mean * inner.mean,
+            sd: Math.sqrt(Math.max(0, td.mean * inner.sd * inner.sd + td.sd * td.sd * inner.mean * inner.mean)) };
+        }
         const n = d.times;
         if (!Number.isInteger(n) || n < 1 || n > MAX_REPEAT)
           throw new MCError(`${who}: число повторов должно быть целым от 1 до ${MAX_REPEAT}`);

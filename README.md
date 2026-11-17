@@ -15,14 +15,20 @@
 Для обычного человека, которому нужно решить: **успею ли? хватит ли? уложусь ли? сколько закладывать?**
 Готовых событий нет — человек описывает свою ситуацию сам, а приложение подсказывает, как.
 
-**Простой режим** (открывается по умолчанию) начинается с вопроса «Какая у вас ситуация?»:
+**Простой режим** (открывается по умолчанию) начинается с поля **«Что вы хотите узнать?»** — вопрос пишется своими словами,
+например «какая вероятность найти новую работу до нового года». Приложение узнаёт тему (работа, продажа, экзамен, поступление,
+похудение, спорт, накопления, учёба, дорога, деньги, дело к сроку, встреча), понимает срок («до нового года», «к лету»,
+«до 1 марта», «за год») и числа («100 кг», «50 тысяч»), само выбирает, как считать, и задаёт вопросы на языке темы:
+«Сколько собеседований бывает за неделю?», «Как часто собеседование заканчивается оффером?» — с подсказкой «Не знаете?
+Обычно 1–2 из 10». Если тема не узнана, человек выбирает из пяти вопросов:
 
 | Схема | Как устроена | Например |
 |---|---|---|
-| 🧩 Из нескольких частей | части идут друг за другом, время или деньги складываются | успеть на самолёт, бюджет поездки, ремонт |
-| 👥 Ждём, пока будет готово всё | всё идёт одновременно, решает самое долгое | встреча, несколько дел сразу |
-| 📈 Иду к цели шаг за шагом | каждую неделю понемногу приближаюсь, иногда откатываюсь | жим 100 кг, похудение, накопления |
-| 🎯 Несколько попыток | каждая попытка удаётся или нет | собеседования, подходы, экзамены |
+| 🧩 Успею ли? Хватит ли? | время или деньги складываются из частей | успеть на самолёт, бюджет поездки, ремонт по этапам |
+| 👥 Соберутся ли все? | всё идёт одновременно, решает самое долгое | встреча, несколько дел сразу |
+| 📈 Когда дойду до цели? | понемногу приближаюсь, иногда откатываюсь | жим 100 кг, похудение, накопления, 1000 слов |
+| 🔁 Получится ли до срока? | пробую, пока не выйдет; попыток за неделю — сколько-то | найти работу, продать квартиру |
+| 🎯 Получится ли с нескольких попыток? | попыток столько-то, каждая удаётся или нет | экзамен, поступление |
 
 Про каждое неизвестное число приложение спрашивает **«Что вы о нём знаете?»** и не требует думать процентами:
 - **знаю точно** — «билеты 18 000 ₽»;
@@ -35,7 +41,7 @@
 - **какой нужен запас**: «чтобы успеть в 9 случаях из 10 — закладывайте **1 ч 58 мин**»;
 - «если всё пойдёт как обычно — 1 ч 15 мин, но так бывает только в 7 случаях из 100»;
 - **что поможет больше всего**: «Пробка — такого не случается → 99 из 100»;
-- для целей — «скорее всего дойдёте за **46 недель (≈ 10,5 мес.)**», для попыток — «нужно примерно 15 собеседований».
+- для целей — «скорее всего дойдёте за **46 недель (≈ 10,5 мес.)**»; для работы — «найдёте до 31 декабря в 89 случаях из 100, для 9 из 10 нужно около 15 собеседований — примерно 3 в неделю».
 
 Ещё в простом режиме:
 - **«Сравнить с другим вариантом»** — варианты А и Б рядом (такси или автобус, 2 или 3 тренировки);
@@ -125,9 +131,9 @@
 
 | Проверка | Что сравнивается | Итог |
 |---|---|---|
-| Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 49 тестов |
-| JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 56 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 93 проверки |
+| Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
+| JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 100 проверок |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -142,11 +148,11 @@
 
 ```
 cd reference
-python -m unittest tests_ref          # эталон: 49 тестов
+python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
-python tests/run_selftest.py          # движок в браузере: 56 проверок
-python tests/run_selftest.py uitest   # страница: 93 проверки
+python tests/run_selftest.py          # движок в браузере: 58 проверок
+python tests/run_selftest.py uitest   # страница: 100 проверок
 ```
 
 ## Структура
@@ -186,9 +192,9 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
-- **Simple mode** for everyone: pick one of four situation types (parts that add up, wait for everything, step by step towards a goal such as a 100 kg bench press, several attempts), describe each number the way you know it (exactly / roughly / may happen N times out of 10 / past values), and get a plain answer: "92 times out of 100", the buffer you need for 9 out of 10, what helps most. Variants A/B side by side, saved calculations, share by link. **Expert mode** keeps the full editor.
+- **Simple mode** for everyone starts with a question in your own words ("will I find a new job before New Year?"): the app recognises the topic, the deadline and the numbers, picks the model and asks in the topic's words. Or pick one of five situation types (parts that add up, wait for everything, step by step towards a goal such as a 100 kg bench press, several attempts), describe each number the way you know it (exactly / roughly / may happen N times out of 10 / past values), and get a plain answer: "92 times out of 100", the buffer you need for 9 out of 10, what helps most. Variants A/B side by side, saved calculations, share by link. **Expert mode** keeps the full editor.
 - A scenario is built from random factors (6 distribution types), formulas, a result and an event. Example: will a meeting start on time given bus delays, lunch overruns and a busy meeting room? 53.94 % ± 0.10 % on 1M runs, exact answer 54 %.
 - Dependent factors: a factor can depend on another one ("rain → bus and lunch delays"), and a dataset can be sampled whole-row so real-world correlations are kept. The app compares the result with a naive model that ignores dependencies. Example: with a common cause the project meets the 40-day deadline in 82.8 % of cases, while the naive model promises 88.4 %.
 - Results: probability with a 95 % CI, exact enumeration when all factors are discrete, percentiles, histogram, tornado sensitivity chart, convergence chart.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 49 Python tests, 56 engine checks and 93 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 100 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/

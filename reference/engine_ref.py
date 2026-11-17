@@ -226,6 +226,19 @@ def prepare_dist(d, who):
             m2 += q * (pt.sd * pt.sd + pt.mean * pt.mean)
         return Dist("mixture", sample, None, m, math.sqrt(max(0.0, m2 - m * m)))
     if t == "repeat":   # сумма N независимых значений; с «да / нет» внутри — число удачных попыток
+        if "timesDist" in d:   # N случайное: сначала разыгрываем N (floor(x + 0,5), не меньше 0), потом N значений
+            td = prepare_dist(d.get("timesDist"), f"{who}, сколько повторов")
+            inner_r = prepare_dist(d.get("dist"), f"{who}, одно повторение")
+
+            def sample_r(rng):
+                k = min(MAX_REPEAT, max(0, math.floor(td.sample(rng) + 0.5)))
+                s = 0.0
+                for _ in range(k):
+                    s += inner_r.sample(rng)
+                return s
+
+            return Dist("repeat", sample_r, None, td.mean * inner_r.mean,
+                        math.sqrt(max(0.0, td.mean * inner_r.sd ** 2 + td.sd ** 2 * inner_r.mean ** 2)))
         n = d.get("times")
         if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > MAX_REPEAT:
             raise MCError(f"{who}: число повторов должно быть целым от 1 до {MAX_REPEAT}")

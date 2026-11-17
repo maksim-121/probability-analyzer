@@ -144,3 +144,19 @@ GYM = {
     "result": {"name": "Итог", "formula": "Недели"},
     "event": {"name": "Успел", "formula": "Итог <= 26"},
 }
+
+
+# ---------------------------------------------------------------- «получится ли до срока»: попытки во времени
+# Найти работу: собеседований в неделю «обычно 2, от 1 до 4», каждое даёт оффер с шансом 0,1.
+# Сколько недель до первого оффера? Успею за 6 недель?
+JOB = {
+    "name": "Найти работу",
+    "factors": [{"name": "Недели", "dist": {"type": "walk", "start": 0, "goal": 1, "maxSteps": 520, "step": {
+        "type": "repeat", "timesDist": {"type": "triangular", "min": 1, "mode": 2, "max": 4},
+        "dist": {"type": "yesno", "p": 0.1}}}}],
+    "result": {"name": "Итог", "formula": "Недели"},
+    "event": {"name": "Успел", "formula": "Итог <= 6"},
+}
+# То же, но ровно 2 собеседования в неделю: P(оффер за 6 недель) = 1 − 0,9^12
+JOB_FIXED = {**JOB, "factors": [{"name": "Недели", "dist": {"type": "walk", "start": 0, "goal": 1, "maxSteps": 520, "step": {
+    "type": "repeat", "timesDist": {"type": "uniform", "min": 2, "max": 2}, "dist": {"type": "yesno", "p": 0.1}}}}]}
