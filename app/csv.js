@@ -131,5 +131,5 @@ const CSV = (() => {
     return { columns: names, rows, dropped, skipped, renamed };
   }
 
-  return { parse, cellNumber, toRows };
+  return { parse, cellNumber, toRows, safeName };
 })();

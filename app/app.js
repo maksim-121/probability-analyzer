@@ -643,6 +643,11 @@
   async function openScenario(file) {
     try {
       const data = JSON.parse(await fileText(file));
+      if (data && data.simple && Array.isArray(data.simple.items)) {     // файл из простого режима
+        PASimple.load(data.simple);
+        setMode('simple');
+        return;
+      }
       const s = data && data.format === 'probability-analyzer' ? data.scenario : data;
       if (!s || !Array.isArray(s.factors) || !s.result) throw new Error('это не файл сценария');
       loadScenario(s, '');
@@ -1037,11 +1042,53 @@
     $('#seed-rand').addEventListener('click', () => {
       $('#seed').value = tryStore(() => crypto.getRandomValues(new Uint32Array(1))[0], Math.floor(Math.random() * 4294967295));
     });
-    document.addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) runSim(); });
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && document.body.dataset.mode === 'expert') runSim();
+    });
     let rt;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawCharts, 150); });
-    runSim();
+
+    $$('[data-mode-btn]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.modeBtn)));
+    PASimple.init();
+    setMode(initialMode());
   }
+
+  // ===================================================================================
+  // Режимы: простой (для всех, по умолчанию) и для специалиста (этот файл)
+  // ===================================================================================
+  const MODE_KEY = 'probability-analyzer.mode';
+
+  function setMode(m, { run = true } = {}) {
+    document.body.dataset.mode = m;
+    $('#simple-view').hidden = m !== 'simple';
+    $('#expert-view').hidden = m !== 'expert';
+    $$('[data-mode-btn]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.modeBtn === m)));
+    tryStore(() => localStorage.setItem(MODE_KEY, m));
+    document.dispatchEvent(new CustomEvent('pa:mode', { detail: m }));
+    if (m === 'expert' && run) { if (!lastRun) runSim(); else drawCharts(); }
+  }
+
+  /** Ссылки #tpl=… и #expert открывают режим специалиста, #simple… — простой; иначе — как в прошлый раз (по умолчанию простой). */
+  function initialMode() {
+    const h = location.hash;
+    if (h.startsWith('#tpl=') || h === '#expert') return 'expert';
+    if (h.startsWith('#simple')) return 'simple';
+    return tryStore(() => localStorage.getItem(MODE_KEY), null) === 'expert' ? 'expert' : 'simple';
+  }
+
+  // для простого режима: «Открыть в режиме специалиста»
+  window.PA = {
+    openExpert(s, settings) {
+      loadScenario(s, '');
+      const st = settings || {};
+      if ([...$('#n').options].some(o => +o.value === st.n)) $('#n').value = String(st.n);
+      if (Number.isInteger(st.seed)) $('#seed').value = st.seed;
+      setMode('expert', { run: false });
+      window.scrollTo(0, 0);
+      runSim();
+    },
+    setMode,
+  };
 
   document.addEventListener('DOMContentLoaded', init);
 })();

@@ -8,7 +8,23 @@
 
 *English summary is at the end of this page.*
 
-![Основной экран](docs/screenshots/main.jpg)
+![Простой режим](docs/screenshots/simple.jpg)
+
+## Два режима
+
+**Простой режим** — для обычного человека, открывается по умолчанию. Ни формул, ни терминов, только четыре вопроса:
+1. Что хотите узнать: «начнётся ли вовремя» (ждём всех) или «уложимся ли в срок» (этапы друг за другом)?
+2. Кто или что может задержать и как: «бывает по-разному» (варианты в процентах), «минимум / обычно / максимум» или «иногда случается»?
+3. Есть ли общая причина, из-за которой задерживаются сразу несколько (например, дождь)?
+4. Что считаем успехом?
+
+Ответ одной фразой — «в 54 случаях из 100», — плюс «чего ждать» и «что поможет больше всего». Ответ пересчитывается сам, пока человек меняет цифры. На телефоне он всегда виден в полоске внизу экрана.
+
+**Режим специалиста** — полный редактор: распределения, формулы, зависимости, загрузка CSV, графики, точный перебор. Из простого режима туда можно перейти кнопкой «Открыть в режиме специалиста»: там будет тот же сценарий, но со всеми формулами.
+
+| Режим специалиста | Простой режим на телефоне |
+|---|---|
+| ![Режим специалиста](docs/screenshots/main.jpg) | ![Телефон](docs/screenshots/simple_mobile.jpg) |
 
 ## Пример: начнётся ли совещание вовремя
 
@@ -83,7 +99,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 42 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 52 проверки |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: опечатки в формулах, CSV, ветки, сохранение и открытие файлов, все шаблоны | 67 проверок |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 87 проверок |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -102,14 +118,14 @@ python -m unittest tests_ref          # эталон: 42 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 52 проверки
-python tests/run_selftest.py uitest   # страница: 67 проверок
+python tests/run_selftest.py uitest   # страница: 87 проверок
 ```
 
 ## Структура
 
 ```
 index.html            страница
-app/                  интерфейс: app.js (редактор и результаты), charts.js (графики SVG), csv.js (разбор CSV)
+app/                  интерфейс: simple.js (простой режим), app.js (режим специалиста), charts.js (графики SVG), csv.js (CSV)
 engine/engine.js      движок: генератор, распределения, язык формул, прогон, статистика, перебор, связи
 engine/templates.js   готовые сценарии
 reference/            Python-эталон движка и его тесты
@@ -142,8 +158,9 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
+- Two modes: a **simple mode** for everyone (four plain-language questions, no formulas; the answer is one sentence like "54 times out of 100" plus "what would help most") and an **expert mode** with the full editor.
 - A scenario is built from random factors (6 distribution types), formulas, a result and an event. Example: will a meeting start on time given bus delays, lunch overruns and a busy meeting room? 53.94 % ± 0.10 % on 1M runs, exact answer 54 %.
 - Dependent factors: a factor can depend on another one ("rain → bus and lunch delays"), and a dataset can be sampled whole-row so real-world correlations are kept. The app compares the result with a naive model that ignores dependencies. Example: with a common cause the project meets the 40-day deadline in 82.8 % of cases, while the naive model promises 88.4 %.
 - Results: probability with a 95 % CI, exact enumeration when all factors are discrete, percentiles, histogram, tornado sensitivity chart, convergence chart.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 42 Python tests, 52 engine checks and 67 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 42 Python tests, 52 engine checks and 87 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/

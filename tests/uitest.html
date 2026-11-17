@@ -3,7 +3,7 @@
 <body style="margin:0">
 <!-- Проверка страницы «как пользователь»: грузит index.html во фрейме, меняет поля, смотрит результат.
      Запуск: python tests/run_selftest.py uitest   (нужен флаг --allow-file-access-from-files, он там есть) -->
-<iframe id="f" src="../index.html" style="width:1300px;height:900px;border:0"></iframe>
+<iframe id="f" src="../index.html#expert" style="width:1300px;height:900px;border:0"></iframe>
 <script>
 'use strict';
 const out = [];
@@ -259,6 +259,84 @@ async function until(fn, ms = 20000) {
   const st = $('[data-csv-status="factors.0.dist"]').textContent;
   check('CSV в строки: 60 строк, 4 столбца, «Дата» не взята', /столбцы: Автобус_мин, Обед_затянулся_мин, Переговорка_занята_мин, Дождь/.test(st) &&
     /текстовые столбцы не взяты: Дата/.test(st), st);
+
+  // ================================================================ простой режим (для обычного человека)
+  f.src = '../index.html?simple#simple=meeting';             // «?simple» — чтобы страница загрузилась заново
+  await new Promise(r => f.addEventListener('load', r, { once: true }));
+  const w2 = f.contentWindow, d2 = f.contentDocument, q = s => d2.querySelector(s);
+  w2.confirm = () => true;
+  const big = () => ((q('.s-big') || {}).textContent || '').replace(/\s+/g, ' ').trim();
+  const ideasReady = () => !!q('.ideas') || /заметно не влияет/.test(q('#s-results').textContent);
+  const inp = (el, v) => { el.value = v; el.dispatchEvent(new w2.Event('input', { bubbles: true })); };
+  const pickEx = async id => {
+    const t = q('#s-tpl'); t.value = id; t.dispatchEvent(new w2.Event('change', { bubbles: true }));
+    await sleep(50);
+    await until(() => big() && ideasReady(), 40000);
+  };
+  await until(() => big() && ideasReady(), 40000);
+
+  // 18. открытие, ответ, «что поможет»
+  check('Простой режим: открыт по ссылке, режим специалиста скрыт',
+    d2.body.dataset.mode === 'simple' && !q('#simple-view').hidden && q('#expert-view').hidden);
+  check('Простой: «54 из 100» и «Как повезёт»', /^54 из 100/.test(big()) && /Как повезёт/.test(q('.s-answer').textContent), big());
+  check('Простой: 100 квадратиков, закрашено 54', d2.querySelectorAll('.dots i').length === 100 && d2.querySelectorAll('.dots i.y').length === 54);
+  const idea0 = q('.idea');
+  check('Что поможет: первым — переговорка, 72 из 100', /Переговорка/.test(idea0.textContent) && /72 из 100/.test(idea0.textContent), idea0.textContent.replace(/\s+/g, ' '));
+  check('Полоска с ответом для телефона заполнена', /54 из 100/.test(q('#s-sticky').textContent));
+
+  // 19. проценты: 105 % -> понятная просьба; 100 % -> новый ответ 0,85 · 0,9 · 0,75 = 57 из 100
+  inp(q('[data-s="items.0.d.options.0.pct"]'), '55');
+  check('Сумма 105 %: подсказка рядом с вариантами', /Итого 105 % — нужно 100 %/.test(q('[data-sum="items.0.d"]').textContent), q('[data-sum="items.0.d"]').textContent);
+  await until(() => q('.s-fix'), 5000);
+  check('Сумма 105 %: вместо ответа — «Чтобы посчитать, поправьте»', !!q('.s-fix') && /в сумме 105 %/.test(q('.s-fix').textContent), q('#s-results').textContent.slice(0, 120));
+  inp(q('[data-s="items.0.d.options.3.pct"]'), '0');
+  await until(() => /^57 из 100/.test(big()), 20000);
+  check('Исправили: 57 из 100 (точно 57,4 %)', /^57 из 100/.test(big()), big());
+
+  // 20. ошибка в «мин / обычно / макс»
+  q('[data-s-act="mode"][data-k="1"][data-mode="range"]').click();
+  inp(q('[data-s="items.1.d.usual"]'), '50');
+  check('«Обычно» больше максимума: понятная ошибка у пункта', /«обычно» должно быть между/.test(q('[data-err="1"]').textContent), q('[data-err="1"]').textContent);
+
+  // 21. вид вопроса «этапы»
+  const chain = q('input[name="s-kind"][value="chain"]');
+  chain.checked = true; chain.dispatchEvent(new w2.Event('change', { bubbles: true }));
+  check('«Уложимся ли в срок?»: шаги переименовались', /Из каких этапов складывается время/.test(q('#s-editor').textContent) &&
+    /Всего не больше/.test(q('.goal').textContent));
+
+  // 22. примеры
+  await pickEx('rain');
+  check('Пример «в дождь»: 53 из 100', /^53 из 100/.test(big()), big());
+  await until(() => /Почему важна общая причина/.test(q('#s-results').textContent), 30000);
+  check('В дождь: «если не учитывать — 51 из 100»', /получилось бы 51 из 100/.test(q('#s-results').textContent));
+  check('В дождь: у Ивана отдельные проценты «Когда «Дождь»»', /Когда «Дождь»:/.test(q('.s-item').textContent));
+  await pickEx('project');
+  check('Проект: 36 из 100, «Скорее нет»', /^36 из 100/.test(big()) && /Скорее нет/.test(q('.s-answer').textContent), big());
+  check('Проект: «как обычно» 25 дн. — только в 8 из 100, без «дн..»',
+    /выйдет 25 дн\. Так быстро получается только в 8 случаях из 100/.test(q('#s-results').textContent) && !/дн\.\./.test(q('#s-results').textContent),
+    (q('#s-results').textContent.match(/Если считать[^.]*\.[^.]*\.[^.]*/) || [''])[0]);
+  check('Проект: сильнее всего ускорит разработка', /Разработка/.test(q('.idea').textContent), q('.idea').textContent.replace(/\s+/g, ' '));
+
+  // 23. сохранение ответов
+  const dl2 = [];
+  w2.HTMLAnchorElement.prototype.click = function () { dl2.push({ name: this.download, href: this.href }); };
+  q('#s-save').click();
+  const savedS = JSON.parse(await (await w2.fetch(dl2[0].href)).text());
+  check('Сохранить: файл «Сроки проекта.json» с ответами простого режима', dl2[0].name === 'Сроки проекта.json' &&
+    savedS.mode === 'simple' && savedS.simple.items.length === 4, dl2[0].name);
+
+  // 24. переход в режим специалиста и обратно
+  q('#s-to-expert').click();
+  await until(() => d2.body.dataset.mode === 'expert' && q('.hero-value') && q('#run').textContent.includes('Рассчитать'), 40000);
+  check('«Открыть в режиме специалиста»: тот же сценарий, ≈ 36 %', !q('#expert-view').hidden && q('#error').hidden &&
+    Math.abs(pnum(q('.hero-value').textContent) - 36) < 1.5, q('.hero-value') && q('.hero-value').textContent);
+  q('[data-mode-btn="simple"]').click();
+  check('Назад в простой режим: ответ на месте', !q('#simple-view').hidden && /^36 из 100/.test(big()));
+
+  // 25. начать заново
+  q('#s-new').click();
+  await until(() => big() && ideasReady(), 20000);
+  check('«Начать заново»: один пустой пункт, ответ посчитан', d2.querySelectorAll('.s-item').length === 1 && !!big(), big());
 
   const passed = out.filter(r => r.ok).length, fail = out.find(r => !r.ok);
   document.title = (fail ? `FAIL ${passed}/${out.length}: ${fail.name} — ${fail.detail}` : `PASS ${passed}/${out.length}`) + ' | UI';

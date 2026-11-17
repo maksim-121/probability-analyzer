@@ -196,6 +196,87 @@
   .cmp td:first-child { text-align: left; white-space: normal; color: var(--text-2); }
   .cmp td:nth-child(2) { font-weight: 650; }
   .verdict { margin: 10px 0 0; font-size: 14px; }
+
+  /* --- режимы и панели */
+  .modes { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; gap: 2px; }
+  .modes button { border: 0; background: transparent; padding: 7px 14px; border-radius: 8px; font-weight: 600; color: var(--text-2); }
+  .modes button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; max-width: 1440px; margin: 0 auto; padding: 4px 16px; }
+
+  /* --- простой режим: вопросы */
+  .s-step h2 { font-size: 17px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
+  .s-step h2 .step-num { flex: none; margin-top: 1px; }
+  .s-step h2 > span:not(.step-num) { font-weight: 400; color: var(--text-2); font-size: 13px; }
+  .choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 10px; }
+  .opt-card { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; background: var(--surface); }
+  .opt-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .opt-card input { margin-top: 4px; accent-color: var(--accent); }
+  .opt-card b { display: block; }
+  .opt-card small { color: var(--text-2); font-size: 13px; }
+  .row2 { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row2 .grow { flex: 1; min-width: 180px; }
+  .row2 .grow input { width: 100%; }
+  .field select { font-size: 15px; color: var(--text); }
+  .s-name { flex: 1; font-weight: 600; font-size: 15px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 4px; }
+  .seg button { border: 1px solid var(--line); background: var(--card); border-radius: 99px; padding: 4px 12px; font-size: 13px; color: var(--text-2); }
+  .seg button[aria-checked="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .opts { display: flex; flex-direction: column; gap: 4px; }
+  .opt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; color: var(--text-2); }
+  .opt-row input { width: 5em; color: var(--text); }
+  .opt-foot { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .sum { font-size: 13px; color: var(--good); }
+  .sum.bad { color: var(--bad); }
+  .sentence { font-size: 14px; line-height: 2.3; }
+  .sentence input { width: 4.5em; margin: 0 2px; }
+  .check { display: flex; gap: 8px; align-items: flex-start; font-size: 14px; }
+  .check input { margin-top: 3px; accent-color: var(--accent); }
+  .alt { border-left: 3px solid var(--accent); padding: 6px 0 6px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .alt-head { font-weight: 600; font-size: 14px; }
+  .s-err { color: var(--bad); font-size: 13px; }
+  .s-err:empty { display: none; }
+  .goal { font-size: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .goal input { width: 6em; font-size: 16px; }
+
+  /* --- простой режим: ответ */
+  .s-q { color: var(--text-2); font-size: 15px; margin-top: 10px; }
+  .s-big { font-size: 64px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+  .s-big span { font-size: 24px; font-weight: 600; color: var(--text-2); }
+  .s-sub { color: var(--text-2); font-size: 14px; margin: 4px 0 12px; }
+  .badge-good, .badge-warn, .badge-bad { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; font-size: 14px; padding: 4px 10px; border-radius: 99px; }
+  .badge-good { background: var(--good-bg); color: var(--good); }
+  .badge-warn { background: var(--warn-bg); color: var(--text); }
+  .badge-bad { background: var(--bad-bg); color: var(--bad); }
+  .b-icon { font-weight: 800; }
+  .dots { display: grid; grid-template-columns: repeat(20, 1fr); gap: 3px; max-width: 420px; margin-bottom: 8px; }
+  .dots i { aspect-ratio: 1; border-radius: 3px; background: var(--line); }
+  .dots i.y { background: var(--s1); }
+  .sw.nn { background: var(--line); }
+  .ideas { display: flex; flex-direction: column; gap: 12px; }
+  .idea { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+  .idea-text { grid-column: 1 / -1; font-size: 14px; }
+  .idea-bar { height: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 99px; overflow: hidden; display: flex; }
+  .idea-bar .now { background: var(--s1); opacity: .35; }
+  .idea-bar .gain { background: var(--s1); }
+  .idea-num { font-weight: 650; font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .idea-num small { color: var(--good); font-weight: 600; margin-left: 4px; }
+  .s-details summary { cursor: pointer; font-weight: 600; }
+  .s-details code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--surface);
+                    border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+  .s-fix h3 { color: var(--bad); }
+  /* полоска с ответом внизу экрана — только когда колонки идут друг под другом */
+  .s-sticky { display: none; }
+  @media (max-width: 1099px) {
+    .s-sticky:not([hidden]) { display: flex; position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 5;
+      justify-content: space-between; align-items: center; gap: 8px; padding: 12px 16px; border: 0; border-radius: 12px;
+      background: var(--text); color: var(--page); font-size: 15px; text-align: left; box-shadow: 0 6px 20px rgba(0, 0, 0, .25); }
+    .s-sticky .st-go { opacity: .75; font-size: 13px; white-space: nowrap; }
+    #simple-view { padding-bottom: 76px; }
+  }
+  @media (max-width: 520px) {
+    .opt-row .long { display: none; }
+    .opt-row input { width: 4.2em; }
+  }
   .runinfo { color: var(--muted); font-size: 12px; margin: 0; }
   .tip { position: fixed; z-index: 10; pointer-events: none; white-space: pre-line; max-width: 320px;
          background: var(--text); color: var(--page); font-size: 13px; padding: 8px 10px; border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,.18); }
@@ -214,9 +295,33 @@
 <header class="top">
   <div>
     <h1>Анализатор вероятностей</h1>
-    <p>Опишите, что может пойти по-разному, — Монте-Карло проиграет это миллион раз и посчитает шансы.</p>
+    <p>Опишите, что может пойти по-разному, — программа проиграет это сотни тысяч раз и посчитает шансы.</p>
   </div>
-  <div class="top-actions">
+  <div class="modes" role="tablist" aria-label="Режим">
+    <button role="tab" data-mode-btn="simple" aria-selected="true">Простой режим</button>
+    <button role="tab" data-mode-btn="expert" aria-selected="false">Для специалиста</button>
+  </div>
+</header>
+
+<!-- ============================== Простой режим ============================== -->
+<div id="simple-view">
+  <div class="toolbar">
+    <label class="field">Пример <select id="s-tpl" aria-label="Пример"></select></label>
+    <button class="btn" id="s-new">Начать заново</button>
+    <button class="btn" id="s-open" title="Открыть сохранённый файл .json">Открыть…</button>
+    <button class="btn" id="s-save" title="Сохранить ответы в файл .json">Сохранить</button>
+    <input type="file" id="s-open-file" accept=".json,application/json" hidden>
+  </div>
+  <main class="layout">
+    <section class="pane" id="s-editor" aria-label="Ваша ситуация"></section>
+    <section class="pane" id="s-results" aria-label="Ответ" aria-live="polite"></section>
+  </main>
+  <button class="s-sticky" id="s-sticky" type="button" hidden></button>
+</div>
+
+<!-- ============================== Режим специалиста ============================== -->
+<div id="expert-view" hidden>
+  <div class="toolbar">
     <label class="field">Шаблон <select id="tpl" aria-label="Шаблон"></select></label>
     <span class="badge" id="tpl-mod" hidden>изменён</span>
     <button class="btn" id="btn-reset" title="Вернуть шаблон к исходному виду">Сбросить</button>
@@ -226,8 +331,6 @@
     <input type="file" id="open-file" accept=".json,application/json" hidden>
     <input type="file" id="csv-file" accept=".csv,.txt,text/csv,text/plain" hidden>
   </div>
-</header>
-
 <main class="layout">
   <!-- ============================== Сценарий ============================== -->
   <section class="pane" id="scenario" aria-label="Сценарий">
@@ -296,6 +399,7 @@
     <div id="results-body" class="pane"></div>
   </section>
 </main>
+</div>
 
 <footer>
   Генератор с сидом (xoshiro128**): одинаковый сид — одинаковый результат. Движок сверяется с Python-эталоном —
@@ -307,6 +411,7 @@
 <script src="engine/templates.js"></script>
 <script src="app/csv.js"></script>
 <script src="app/charts.js"></script>
+<script src="app/simple.js"></script>
 <script src="app/app.js"></script>
 </body>
 </html>
