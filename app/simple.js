@@ -184,6 +184,9 @@ const PASimple = (() => {
       s.until.deadline = dlFor(t, 'неделя', DL());
       s.until.words = { one: 'собеседование', few: 'собеседования', many: 'собеседований', succ: 'оффер', succFew: 'оффера', succMany: 'офферов',
         succIns: 'оффером', act: 'найдёте работу', inf: 'найти работу', hint: 'Не знаете? Обычно 1–2 из 10 собеседований заканчиваются оффером (очень примерно).' };
+      // цепочка «отклики → зовут на собеседование → оффер → оффер подходит»: число откликов человек знает лучше,
+      // чем число собеседований; галочкой можно вернуться к «знаю, сколько собеседований»
+      s.until.funnel = { on: true, apps: { know: 'approx', v: V({ exact: 10, usual: 10, min: 5, max: 15 }) }, invite: 30, ok: 70 };
       return s;
     } },
     { id: 'sell', re: /(прода[мтжю]|продам|покупател|сдам\s+квартир|сдать\s+квартир|арендатор)/, say: 'вы что-то продаёте. Посчитаю, получится ли до срока', build: t => {
@@ -419,10 +422,12 @@ const PASimple = (() => {
       const d = checkDeadline(g.deadline, g.period, false);
       if (d) global.push(d);
     } else if (s.scheme === 'until') {
-      const u = s.until;
-      const m = checkValue(u.attempts.know, u.attempts.v);
-      if (m) items.attempts = `Сколько ${u.words.many} за ${PERIODS[u.period].acc}: ${m}.`;
+      const u = s.until, a = untilAttempts(u);
+      const m = checkValue(a.know, a.v);
+      if (m) items.attempts = `Сколько ${untilWords(u).many} за ${PERIODS[u.period].acc}: ${m}.`;
       if (!(u.pct >= 0 && u.pct <= 100)) global.push('Шанс — от 0 до 100 %.');
+      if (funnelOn(u) && !(u.funnel.invite >= 0 && u.funnel.invite <= 100 && u.funnel.ok >= 0 && u.funnel.ok <= 100))
+        global.push('Доли «зовут на собеседование» и «оффер подходит» — от 0 до 100 %.');
       if (!(Number.isInteger(u.need) && u.need >= 1)) global.push('Сколько нужно — целое число, хотя бы 1.');
       const d = checkDeadline(u.deadline, u.period, true);
       if (d) global.push(d);
@@ -459,6 +464,11 @@ const PASimple = (() => {
     return (1 - q) * d.mean - q * (g.setback.from + g.setback.to) / 2;
   }
   const meanOf = (know, v) => MC.prepareDist(distOf(know, v), 'x').mean;
+  // «Получится ли до срока» с цепочкой «отклики → собеседование → оффер → подходит» (тема «работа»)
+  const funnelOn = u => !!(u && u.funnel && u.funnel.on);
+  const untilAttempts = u => (funnelOn(u) ? u.funnel.apps : u.attempts);
+  const untilP = u => (funnelOn(u) ? (u.funnel.invite / 100) * (u.pct / 100) * (u.funnel.ok / 100) : u.pct / 100);
+  const untilWords = u => (funnelOn(u) ? { one: 'отклик', few: 'отклика', many: 'откликов' } : u.words);
 
   function toScenario(s) {
     const taken = new Set(['итог', 'успех']);
@@ -479,8 +489,9 @@ const PASimple = (() => {
       const u = s.until, P = PERIODS[u.period], W = deadlinePeriods(u.deadline, u.period);
       return { name: s.title || 'До срока', description: 'Собрано в простом режиме: получится ли до срока.',
         factors: [{ name: 'Периоды', label: `Сколько ${P.forms[2]} уйдёт`,
+          // с цепочкой каждый отклик сам по себе ведёт к подходящему офферу с шансом «зовут × оффер × подходит»
           dist: { type: 'walk', start: 0, goal: u.need, maxSteps: P.max, step: { type: 'repeat',
-            timesDist: distOf(u.attempts.know, u.attempts.v), dist: { type: 'yesno', p: u.pct / 100 } } } }],
+            timesDist: distOf(untilAttempts(u).know, untilAttempts(u).v), dist: { type: 'yesno', p: untilP(u) } } } }],
         derived: [], result: { name: 'Итог', label: `Сколько ${P.forms[2]} уйдёт`, unit: P.forms[2], formula: 'Периоды' },
         event: { name: 'Успех', label: `Получилось ${deadlineText(u.deadline, u.period).replace(/ — .*$/, '')}`, formula: `Итог <= ${W}` } };
     }
@@ -678,19 +689,41 @@ const PASimple = (() => {
           <label class="field">считаем по${periodSelect('until.period', u.period)}</label></div>
         ${deadlineCtl('until.deadline', u.deadline, u.period, false)}
       </div>
+      ${funnelOn(u) ? `
+      <div class="card s-step">
+        <h2><span class="step-num">2</span><span>Сколько откликов вы отправляете за ${P.acc}?</span></h2>
+        ${knowSeg('until.funnel.apps', u.funnel.apps.know, ['exact', 'approx', 'history'])}
+        ${valueEditor(u.funnel.apps.know, u.funnel.apps.v, 'until.funnel.apps.v', '', { approxHint: 'Сколько вакансий в неделю вы откликаетесь — обычно, меньше всего, больше всего.' })}
+        <div class="s-err" data-err="attempts"></div>
+        <label class="check"><input type="checkbox" data-s="until.funnel.on" checked> Считать от откликов
+          <span class="muted">(снимите, если знаете, сколько у вас собеседований)</span></label>
+      </div>
+      <div class="card s-step">
+        <h2><span class="step-num">3</span><span>Из 10 откликов на сколько зовут на собеседование?</span></h2>
+        <div class="maybe"><span>Зовут</span> ${chanceCtl('until.funnel.invite', u.funnel.invite)}</div>
+        <p class="hint s-tip">💡 Не знаете? Посмотрите, сколько откликов вы отправили и сколько было приглашений. Часто 1–3 из 10 (очень примерно).</p>
+      </div>` : `
       <div class="card s-step">
         <h2><span class="step-num">2</span><span>Сколько ${w.many} бывает за ${P.acc}?</span></h2>
         ${knowSeg('until.attempts', u.attempts.know, ['exact', 'approx', 'history'])}
         ${valueEditor(u.attempts.know, u.attempts.v, 'until.attempts.v', '', { approxHint: 'Считаются целыми: бывает 1, 2, 3, 4…' })}
         <div class="s-err" data-err="attempts"></div>
-      </div>
+        ${u.funnel ? `<label class="check"><input type="checkbox" data-s="until.funnel.on"> Считать от откликов
+          <span class="muted">(если проще сказать, сколько вакансий вы откликаетесь)</span></label>` : ''}
+      </div>`}
       <div class="card s-step">
-        <h2><span class="step-num">3</span><span>Как часто ${w.one} заканчивается ${w.succIns || 'успехом'}?</span></h2>
+        <h2><span class="step-num">${funnelOn(u) ? 4 : 3}</span><span>Как часто ${w.one} заканчивается ${w.succIns || 'успехом'}?</span></h2>
         <div class="maybe"><span>Получается</span> ${chanceCtl('until.pct', u.pct)}</div>
         ${w.hint ? `<p class="hint s-tip">💡 ${esc(w.hint)}</p>` : ''}
       </div>
+      ${funnelOn(u) ? `
       <div class="card s-step">
-        <h2><span class="step-num">4</span><span>Сколько нужно?</span></h2>
+        <h2><span class="step-num">5</span><span>Из 10 офферов сколько вам подойдут?</span></h2>
+        <div class="maybe"><span>Подходят</span> ${chanceCtl('until.funnel.ok', u.funnel.ok)}</div>
+        <p class="hint s-tip">💡 Оффер — ещё не работа: зарплата или условия могут не устроить. Если согласитесь на любой — 10 из 10.</p>
+      </div>` : ''}
+      <div class="card s-step">
+        <h2><span class="step-num">${funnelOn(u) ? 6 : 4}</span><span>Сколько нужно?</span></h2>
         <label class="goal">Хотя бы <input inputmode="numeric" data-s="until.need" data-num value="${fmtIn(u.need)}" aria-label="Сколько нужно"> ${esc(plural(u.need, [w.succ, w.succFew, w.succMany]))}</label>
       </div>`;
   }
@@ -972,6 +1005,17 @@ const PASimple = (() => {
       if (g.setback.on && g.setback.pct > 0) { const t = clone(s); t.goal.setback.pct = 0; out.push({ name: `Без плохих ${P.forms[2]}`, what: 'ни пропусков, ни откатов', s: t }); }
       const t = clone(s); bump(t.goal.step, { mul: 1.2 });
       out.push({ name: 'Темп на 20 % быстрее', what: `за ${P.acc} на пятую часть больше`, s: t });
+    } else if (s.scheme === 'until' && funnelOn(s.until)) {
+      // цепочка: какое звено слабее всего — отклики, приглашения, собеседования, условия
+      const u = s.until, f = u.funnel, P = PERIODS[u.period];
+      const t1 = clone(s); bump(t1.until.funnel.apps, { add: 5 });
+      out.push({ name: `+5 откликов в ${P.acc}`, what: 'больше откликов', s: t1 });
+      if (f.invite <= 90) { const t2 = clone(s); t2.until.funnel.invite = f.invite + 10; out.push({ name: 'Зовут чаще', what: `на 1 из 10 (${tenText(f.invite + 10)}) — сильнее резюме и сопроводительные`, s: t2 }); }
+      if (u.pct <= 90) { const t3 = clone(s); t3.until.pct = u.pct + 10; out.push({ name: 'Собеседования удачнее', what: `оффер на 1 из 10 чаще (${tenText(u.pct + 10)}) — лучше подготовиться`, s: t3 }); }
+      if (f.ok < 100) { const t4 = clone(s); t4.until.funnel.ok = 100; out.push({ name: 'Согласиться на любой оффер', what: 'не отказываться из-за условий', s: t4 }); }
+      const t5 = clone(s), dl = t5.until.deadline;
+      if (dl.mode === 'date') { const d = fromIso(dl.date); d.setMonth(d.getMonth() + 1); dl.date = iso(d); } else dl.value += Math.round(P.perMonth);
+      out.push({ name: 'Срок на месяц позже', what: deadlineText(dl, u.period).replace(/ — .*$/, ''), s: t5 });
     } else if (s.scheme === 'until') {
       const u = s.until, w = u.words, P = PERIODS[u.period];
       const t1 = clone(s); bump(t1.until.attempts, { add: 1 });
@@ -998,8 +1042,13 @@ const PASimple = (() => {
       fail('С такими цифрами цель не приближается', `<p>В среднем за ${PERIODS[s.goal.period].acc} вы ${meanStep(s.goal) < 0 ? 'откатываетесь назад' : 'стоите на месте'}: плохие периоды съедают весь прогресс. Проверьте темп и откаты.</p>`);
       return;
     }
-    if (s.scheme === 'until' && (s.until.pct <= 0 || meanOf(s.until.attempts.know, s.until.attempts.v) <= 0)) {
-      fail('Так не получится никогда', `<p>${s.until.pct <= 0 ? `Если ${s.until.words.one} никогда не удаётся, сколько ни пробуй — результата не будет.` : `Если ${s.until.words.many} нет совсем, результата не будет.`} Проверьте цифры.</p>`);
+    if (s.scheme === 'until' && (untilP(s.until) <= 0 || meanOf(untilAttempts(s.until).know, untilAttempts(s.until).v) <= 0)) {
+      const u = s.until, f = funnelOn(u) ? u.funnel : null;
+      const why = meanOf(untilAttempts(u).know, untilAttempts(u).v) <= 0 ? `Если ${untilWords(u).many} нет совсем, результата не будет.`
+        : f && f.invite <= 0 ? 'Если на собеседования не зовут совсем, оффера не будет.'
+        : f && f.ok <= 0 ? 'Если ни один оффер не подходит, работу не найти.'
+        : `Если ${u.words.one} никогда не удаётся, сколько ни пробуй — результата не будет.`;
+      fail('Так не получится никогда', `<p>${why} Проверьте цифры: «почти никогда» лучше вписать как маленький процент, например 3 %.</p>`);
       return;
     }
     let main, sc;
@@ -1113,10 +1162,14 @@ const PASimple = (() => {
       if (R.pct[90] <= P.max) lines.push(`Чтобы почти наверняка (9 из 10) — нужно <b>${fmtPeriods(Math.ceil(R.pct[90]), period)}</b>.`);
       if (R.pct[10] < R.pct[50]) lines.push(`Если повезёт (1 из 10) — уже за ${fmtPeriods(Math.max(1, Math.floor(R.pct[10])), period)}.`);
       if (isUntil) {
-        const u = s.until, Wp = deadlinePeriods(u.deadline, period), need = triesFor(u.pct / 100, u.need, 0.9);
+        const u = s.until, Wp = deadlinePeriods(u.deadline, period), need = triesFor(untilP(u), u.need, 0.9), aw = untilWords(u);
         if (Number.isFinite(need) && Wp >= 1) {
           const per = Math.ceil(need / Wp);
-          lines.push(`Чтобы ${esc(u.words.inf || 'получилось')} ${deadlineText(u.deadline, period).replace(/ — .*$/, '')} в 9 случаях из 10, нужно около ${need} ${plural(need, [u.words.one, u.words.few, u.words.many])} — примерно <b>${per} в ${P.acc}</b>.`);
+          lines.push(`Чтобы ${esc(u.words.inf || 'получилось')} ${deadlineText(u.deadline, period).replace(/ — .*$/, '')} в 9 случаях из 10, нужно около ${need} ${plural(need, [aw.one, aw.few, aw.many])} — примерно <b>${per} в ${P.acc}</b>.`);
+        }
+        if (funnelOn(u)) {
+          const f = u.funnel, perApp = untilP(u);
+          lines.push(`Из 100 откликов в среднем: ${num(f.invite)} собеседований → ${num(f.invite * u.pct / 100)} офферов → ${num(perApp * 100)} подходящих. То есть примерно 1 подходящий оффер на ${Math.round(1 / perApp)} откликов.`);
         }
       }
     } else {
@@ -1137,7 +1190,7 @@ const PASimple = (() => {
     const hist = (name, v, know) => { if (know === 'history' && v.history.length < 5) few.push(name); };
     if (s.items) s.items.forEach((it, k) => hist(it.name || `Пункт ${k + 1}`, it.v, it.know));
     if (isGoal) hist('темп', s.goal.step.v, s.goal.step.know);
-    if (isUntil) hist(s.until.words.many, s.until.attempts.v, s.until.attempts.know);
+    if (isUntil) hist(untilWords(s.until).many, untilAttempts(s.until).v, untilAttempts(s.until).know);
     if (few.length) warn.push(`Мало прошлых значений (${few.map(x => `«${esc(x)}»`).join(', ')}): ответ примерный. Чем больше впишете, тем точнее.`);
     if (warn.length) html += `<section class="card s-warn"><h3>Обратите внимание</h3><ul class="plain">${warn.map(w => `<li>${w}</li>`).join('')}</ul></section>`;
 
