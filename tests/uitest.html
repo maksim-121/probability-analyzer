@@ -261,82 +261,114 @@ async function until(fn, ms = 20000) {
     /текстовые столбцы не взяты: Дата/.test(st), st);
 
   // ================================================================ простой режим (для обычного человека)
-  f.src = '../index.html?simple#simple=meeting';             // «?simple» — чтобы страница загрузилась заново
-  await new Promise(r => f.addEventListener('load', r, { once: true }));
-  const w2 = f.contentWindow, d2 = f.contentDocument, q = s => d2.querySelector(s);
-  w2.confirm = () => true;
-  const big = () => ((q('.s-big') || {}).textContent || '').replace(/\s+/g, ' ').trim();
-  const ideasReady = () => !!q('.ideas') || /заметно не влияет/.test(q('#s-results').textContent);
-  const inp = (el, v) => { el.value = v; el.dispatchEvent(new w2.Event('input', { bubbles: true })); };
-  const pickEx = async id => {
-    const t = q('#s-tpl'); t.value = id; t.dispatchEvent(new w2.Event('change', { bubbles: true }));
-    await sleep(50);
-    await until(() => big() && ideasReady(), 40000);
+  let w2 = null, d2 = null;
+  const goSimple = async hash => {
+    f.src = `../index.html?r${Math.random().toString(36).slice(2)}${hash}`;
+    await new Promise(r => f.addEventListener('load', r, { once: true }));
+    w2 = f.contentWindow; d2 = f.contentDocument;
+    w2.confirm = () => true;
+    w2.prompt = () => null;
   };
-  await until(() => big() && ideasReady(), 40000);
+  const q = s => d2.querySelector(s), qa = s => [...d2.querySelectorAll(s)];
+  const big = () => ((q('.s-big') || {}).textContent || '').replace(/\s+/g, ' ').trim();
+  const resText = () => q('#s-results').textContent.replace(/\s+/g, ' ');
+  const ideasReady = () => /Что поможет больше всего/.test(resText()) && !/Считаю/.test(resText());
+  const inp = (el, v) => { el.value = v; el.dispatchEvent(new w2.Event('input', { bubbles: true })); };
+  const ready = () => until(() => big() && ideasReady(), 60000);
 
-  // 18. открытие, ответ, «что поможет»
-  check('Простой режим: открыт по ссылке, режим специалиста скрыт',
-    d2.body.dataset.mode === 'simple' && !q('#simple-view').hidden && q('#expert-view').hidden);
-  check('Простой: «54 из 100» и «Как повезёт»', /^54 из 100/.test(big()) && /Как повезёт/.test(q('.s-answer').textContent), big());
-  check('Простой: 100 квадратиков, закрашено 54', d2.querySelectorAll('.dots i').length === 100 && d2.querySelectorAll('.dots i.y').length === 54);
-  const idea0 = q('.idea');
-  check('Что поможет: первым — переговорка, 72 из 100', /Переговорка/.test(idea0.textContent) && /72 из 100/.test(idea0.textContent), idea0.textContent.replace(/\s+/g, ' '));
-  check('Полоска с ответом для телефона заполнена', /54 из 100/.test(q('#s-sticky').textContent));
+  // 18. стартовый экран
+  await goSimple('#simple=new');
+  try { w2.localStorage.clear(); } catch (e) {}
+  check('Простой режим: «Какая у вас ситуация?» — 4 схемы и 7 примеров',
+    qa('.scheme').length === 4 && qa('.chip').length === 7 && /Какая у вас ситуация/.test(q('#s-editor').textContent));
+  check('Стартовый экран: режим специалиста скрыт, кнопки «Сравнить» нет',
+    d2.body.dataset.mode === 'simple' && q('#expert-view').hidden && !q('[data-s-act="compare"]'));
 
-  // 19. проценты: 105 % -> понятная просьба; 100 % -> новый ответ 0,85 · 0,9 · 0,75 = 57 из 100
-  inp(q('[data-s="items.0.d.options.0.pct"]'), '55');
-  check('Сумма 105 %: подсказка рядом с вариантами', /Итого 105 % — нужно 100 %/.test(q('[data-sum="items.0.d"]').textContent), q('[data-sum="items.0.d"]').textContent);
+  // 19. своя ситуация «из частей» с нуля: 30 мин точно + «бывает 5 из 10 ещё 10 мин»; успею за 35? -> 50 из 100
+  q('[data-s-act="scheme"][data-scheme="parts"]').click();
+  await until(() => big(), 30000);
+  check('Новая ситуация «из частей»: одна часть, ответ сразу посчитан', qa('.s-item').length === 1 && !!big(), big());
+  inp(q('[data-s="items.0.name"]'), 'Сборы');
+  q('[data-s-act="know"][data-p="items.0"][data-know="exact"]').click();
+  inp(q('[data-s="items.0.v.exact"]'), '30');
+  q('[data-s-act="add"]').click();
+  q('[data-s-act="know"][data-p="items.1"][data-know="maybe"]').click();
+  q('[data-s-act="ten"][data-p="items.1.v.pct"][data-n="5"]').click();
+  inp(q('[data-s="items.1.v.from"]'), '10');
+  inp(q('[data-s="items.1.v.to"]'), '10');
+  inp(q('[data-s="limit.value"]'), '35');
+  await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
+  check('«Знаю точно» + «может случиться» (5 из 10): 50 из 100', /^50 из 100/.test(big()), big());
+  check('Кружочки: «5 из 10», в поле 50 %', /5 из 10/.test(q('.ten-txt').textContent) && q('input[data-s="items.1.v.pct"]').value === '50');
+  check('Запас в человеческих единицах: «закладывайте 40 мин»', /закладывайте 40 мин/.test(resText()), (resText().match(/Чтобы[^.]*\./) || [''])[0]);
+
+  // 20. ошибки — по-человечески
+  inp(q('[data-s="items.1.v.from"]'), '20');
+  check('«от» больше «до»: ошибка прямо у части', /«от» больше, чем «до»/.test(q('[data-err="1"]').textContent), q('[data-err="1"]').textContent);
   await until(() => q('.s-fix'), 5000);
-  check('Сумма 105 %: вместо ответа — «Чтобы посчитать, поправьте»', !!q('.s-fix') && /в сумме 105 %/.test(q('.s-fix').textContent), q('#s-results').textContent.slice(0, 120));
-  inp(q('[data-s="items.0.d.options.3.pct"]'), '0');
-  await until(() => /^57 из 100/.test(big()), 20000);
-  check('Исправили: 57 из 100 (точно 57,4 %)', /^57 из 100/.test(big()), big());
+  check('Вместо ответа — «Чтобы посчитать, поправьте»', !!q('.s-fix'));
+  inp(q('[data-s="items.1.v.from"]'), '10');
+  await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
 
-  // 20. ошибка в «мин / обычно / макс»
-  q('[data-s-act="mode"][data-k="1"][data-mode="range"]').click();
-  inp(q('[data-s="items.1.d.usual"]'), '50');
-  check('«Обычно» больше максимума: понятная ошибка у пункта', /«обычно» должно быть между/.test(q('[data-err="1"]').textContent), q('[data-err="1"]').textContent);
+  // 21. «Готово» сворачивает часть в одну строку
+  q('[data-s-act="close"][data-k="0"]').click();
+  check('«Готово»: часть свернулась в строку «ровно 30 мин»', /ровно 30 мин/.test((q('.s-item.closed') || {}).textContent || ''));
 
-  // 21. вид вопроса «этапы»
-  const chain = q('input[name="s-kind"][value="chain"]');
-  chain.checked = true; chain.dispatchEvent(new w2.Event('change', { bubbles: true }));
-  check('«Уложимся ли в срок?»: шаги переименовались', /Из каких этапов складывается время/.test(q('#s-editor').textContent) &&
-    /Всего не больше/.test(q('.goal').textContent));
+  // 22. сравнение вариантов: в Б «бывает 2 из 10» -> 80 из 100, Б лучше
+  q('[data-s-act="compare"]').click();
+  check('Вариант Б создан и открыт', qa('.tabs [role="tab"]').length === 2 && /Вариант Б/.test(q('.tabs [aria-selected="true"]').textContent));
+  q('[data-s-act="open"][data-k="1"]').click();
+  q('[data-s-act="ten"][data-p="items.1.v.pct"][data-n="2"]').click();
+  await until(() => /^80 из 100/.test(big()) && /Лучше вариант/.test(resText()), 40000);
+  check('Б: 80 из 100, сравнение: «Лучше вариант Б»', /^80 из 100/.test(big()) && /Лучше вариант Б/.test(resText()), big());
 
-  // 22. примеры
-  await pickEx('rain');
-  check('Пример «в дождь»: 53 из 100', /^53 из 100/.test(big()), big());
-  await until(() => /Почему важна общая причина/.test(q('#s-results').textContent), 30000);
-  check('В дождь: «если не учитывать — 51 из 100»', /получилось бы 51 из 100/.test(q('#s-results').textContent));
-  check('В дождь: у Ивана отдельные проценты «Когда «Дождь»»', /Когда «Дождь»:/.test(q('.s-item').textContent));
-  await pickEx('project');
-  check('Проект: 36 из 100, «Скорее нет»', /^36 из 100/.test(big()) && /Скорее нет/.test(q('.s-answer').textContent), big());
-  check('Проект: «как обычно» 25 дн. — только в 8 из 100, без «дн..»',
-    /выйдет 25 дн\. Так быстро получается только в 8 случаях из 100/.test(q('#s-results').textContent) && !/дн\.\./.test(q('#s-results').textContent),
-    (q('#s-results').textContent.match(/Если считать[^.]*\.[^.]*\.[^.]*/) || [''])[0]);
-  check('Проект: сильнее всего ускорит разработка', /Разработка/.test(q('.idea').textContent), q('.idea').textContent.replace(/\s+/g, ' '));
+  // 23. «Мои расчёты» сохраняются сами
+  q('#s-my').click();
+  check('«Мои расчёты»: расчёт с двумя вариантами сохранился сам', qa('#s-my-list li').length >= 1 && /2 варианта/.test(q('#s-my-list').textContent),
+    q('#s-my-list').textContent.replace(/\s+/g, ' ').slice(0, 100));
 
-  // 23. сохранение ответов
-  const dl2 = [];
-  w2.HTMLAnchorElement.prototype.click = function () { dl2.push({ name: this.download, href: this.href }); };
-  q('#s-save').click();
-  const savedS = JSON.parse(await (await w2.fetch(dl2[0].href)).text());
-  check('Сохранить: файл «Сроки проекта.json» с ответами простого режима', dl2[0].name === 'Сроки проекта.json' &&
-    savedS.mode === 'simple' && savedS.simple.items.length === 4, dl2[0].name);
+  // 24. ссылка: открываем — те же два варианта
+  const link = w2.eval('PASimple').shareLink();
+  check('«Поделиться»: в ссылке зашит расчёт', /#s=[A-Za-z0-9_-]{20,}$/.test(link));
+  await goSimple(link.slice(link.indexOf('#')));
+  await until(() => big(), 40000);
+  check('Открыли по ссылке: те же 2 варианта', qa('.tabs [role="tab"]').length === 2 && /^(50|80) из 100/.test(big()), big());
 
-  // 24. переход в режим специалиста и обратно
+  // 25. пример «самолёт»: часы и минуты, «как обычно» бывает редко, сильнее всего — пробка
+  await goSimple('#simple=plane'); await ready();
+  check('Самолёт: ≈ 92 из 100, «Почти наверняка»', /^9[123] из 100/.test(big()) && /Почти наверняка/.test(q('.s-answer').textContent), big());
+  check('Самолёт: запас «1 ч 5x мин», «как обычно» — только в нескольких случаях из 100',
+    /закладывайте 1 ч \d+ мин/.test(resText()) && /так или лучше бывает только в \d+ случаях из 100/.test(resText()));
+  check('Самолёт: сильнее всего поможет «Пробка — такого не случается»', /Пробка/.test(q('.idea').textContent), q('.idea').textContent.replace(/\s+/g, ' '));
+
+  // 26. «иду к цели»: жим (вверх), похудение (вниз), здравый смысл
+  await goSimple('#simple=bench'); await ready();
+  check('Жим: «скорее всего дойдёте за N недель (≈ M мес.)»', /дойдёте за \d+ недел\S* \(≈ [\d,]+ мес\.\)/.test(resText()), (resText().match(/Скорее всего дойдёте[^.]*\./) || [''])[0]);
+  check('Жим: гистограмма по целым неделям (подсказки «30», а не «30,4 … 31,5»)',
+    qa('#s-hist .hit').length > 5 && qa('#s-hist .hit').every(r => /Срок: \d+(–\d+)? недель/.test(r.getAttribute('data-tip'))));
+  q('[data-s-act="ten"][data-p="goal.setback.pct"][data-n="10"]').click();
+  await until(() => q('.s-fix'), 10000);
+  check('Откаты 10 из 10: «С такими цифрами цель не приближается»', /цель не приближается/.test(resText()));
+  await goSimple('#simple=weight'); await ready();
+  check('Похудение (цель ниже старта): «сбрасываете», ответ есть', /сбрасываете/.test(q('#s-editor').textContent) && !!big() && !q('.s-fix'), big());
+
+  // 27. попытки: точный биномиальный ответ 1 − 0,85^8 = 72,75 %
+  await goSimple('#simple=offer'); await ready();
+  const exactP = w2.eval('PASimple').binomAtLeast(8, 0.15, 1);
+  check('Собеседования: 73 из 100 (точно 1 − 0,85⁸ = 72,75 %)', Math.abs(exactP - 0.7275) < 1e-4 && /^73 из 100/.test(big()), big());
+  check('Собеседования: «нужно примерно 15 попыток» для 9 из 10', /нужно примерно 15 попыток/.test(resText()));
+  check('Шанс 15 %: подпись «1,5 из 10»', /1,5 из 10/.test(q('.ten-txt').textContent), q('.ten-txt').textContent);
+
+  // 28. переход в режим специалиста: тот же расчёт, составной тип виден
   q('#s-to-expert').click();
-  await until(() => d2.body.dataset.mode === 'expert' && q('.hero-value') && q('#run').textContent.includes('Рассчитать'), 40000);
-  check('«Открыть в режиме специалиста»: тот же сценарий, ≈ 36 %', !q('#expert-view').hidden && q('#error').hidden &&
-    Math.abs(pnum(q('.hero-value').textContent) - 36) < 1.5, q('.hero-value') && q('.hero-value').textContent);
-  q('[data-mode-btn="simple"]').click();
-  check('Назад в простой режим: ответ на месте', !q('#simple-view').hidden && /^36 из 100/.test(big()));
+  await until(() => d2.body.dataset.mode === 'expert' && q('.hero-value') && q('#run').textContent.includes('Рассчитать'), 60000);
+  check('«Открыть в режиме специалиста»: ≈ 72,7 %, тип «Повтор N раз» виден', !q('#expert-view').hidden && q('#error').hidden &&
+    Math.abs(pnum(q('.hero-value').textContent) - 72.75) < 0.3 && /Повтор N раз/.test(q('#factors').textContent), q('.hero-value') && q('.hero-value').textContent);
 
-  // 25. начать заново
+  // 29. «Новая ситуация» — снова выбор схемы
+  q('[data-mode-btn="simple"]').click();
   q('#s-new').click();
-  await until(() => big() && ideasReady(), 20000);
-  check('«Начать заново»: один пустой пункт, ответ посчитан', d2.querySelectorAll('.s-item').length === 1 && !!big(), big());
+  check('«Новая ситуация»: снова «Какая у вас ситуация?»', qa('.scheme').length === 4);
 
   const passed = out.filter(r => r.ok).length, fail = out.find(r => !r.ok);
   document.title = (fail ? `FAIL ${passed}/${out.length}: ${fail.name} — ${fail.detail}` : `PASS ${passed}/${out.length}`) + ' | UI';

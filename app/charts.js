@@ -83,7 +83,7 @@ const Charts = (() => {
       const yesH = o.hasEvent ? (b.pYes / yMax) * ih : 0;
       const allH = (b.p / yMax) * ih;
       const noH = allH - yesH;
-      const range = o.discrete ? `${num(b.from)}` : `${num(b.from)} … ${num(b.to)}`;
+      const range = b.label || (o.discrete ? `${num(b.from)}` : `${num(b.from)} … ${num(b.to)}`);
       let tip = `${o.resultLabel}: ${range}${o.unit ? ' ' + o.unit : ''}\n${pct(b.p, 2)} прогонов`;
       if (o.hasEvent) tip += `\n${o.yesLabel}: ${pct(b.pYes, 2)} · ${o.noLabel}: ${pct(b.p - b.pYes, 2)}`;
       // нижний сегмент («да»), над ним через 2px зазор — «нет»; закругляется только верхний

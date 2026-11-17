@@ -96,6 +96,7 @@
   .item { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--surface); }
   .row { display: flex; gap: 6px; align-items: center; min-width: 0; }
   input, select, textarea { background: var(--input); border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; min-width: 0; }
+  input[type="checkbox"], input[type="radio"] { padding: 0; width: auto; flex: none; accent-color: var(--accent); }
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
   textarea { width: 100%; resize: vertical; }
   .name { width: 9.5em; font-weight: 600; flex: none; }
@@ -206,7 +207,6 @@
   /* --- простой режим: вопросы */
   .s-step h2 { font-size: 17px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
   .s-step h2 .step-num { flex: none; margin-top: 1px; }
-  .s-step h2 > span:not(.step-num) { font-weight: 400; color: var(--text-2); font-size: 13px; }
   .choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-bottom: 10px; }
   .opt-card { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; background: var(--surface); }
   .opt-card.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
@@ -236,7 +236,7 @@
   .s-err { color: var(--bad); font-size: 13px; }
   .s-err:empty { display: none; }
   .goal { font-size: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .goal input { width: 6em; font-size: 16px; }
+  .goal input:not([type="checkbox"]) { width: 6em; font-size: 16px; }
 
   /* --- простой режим: ответ */
   .s-q { color: var(--text-2); font-size: 15px; margin-top: 10px; }
@@ -264,6 +264,49 @@
   .s-details code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--surface);
                     border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
   .s-fix h3 { color: var(--bad); }
+  /* --- простой режим v2: выбор ситуации, «что вы знаете», варианты */
+  .schemes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+  .scheme { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; text-align: left; border: 1px solid var(--line);
+            background: var(--surface); border-radius: 12px; padding: 14px; color: var(--text); }
+  .scheme:hover { border-color: var(--accent); }
+  .scheme .sc-icon { grid-row: span 3; font-size: 26px; line-height: 1; }
+  .scheme b { font-size: 16px; }
+  .scheme small { color: var(--text-2); font-size: 13px; }
+  .scheme em { color: var(--muted); font-size: 12px; font-style: normal; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .chip { border: 1px solid var(--line); background: var(--card); border-radius: 99px; padding: 6px 12px; font-size: 14px; }
+  .chip:hover { border-color: var(--accent); }
+  .s-scheme { display: flex; gap: 8px; align-items: baseline; color: var(--text-2); font-size: 14px; padding: 0 4px; }
+  .s-scheme span { font-weight: 600; color: var(--text); }
+  .know-q { font-size: 13px; color: var(--text-2); }
+  .s-item.closed { gap: 4px; }
+  .s-sum { display: flex; justify-content: space-between; gap: 8px; width: 100%; text-align: left; border: 0; background: transparent;
+           padding: 2px 4px; font-size: 14px; color: var(--text-2); }
+  .s-sum .edit { color: var(--accent); white-space: nowrap; }
+  .done { align-self: flex-start; }
+  .maybe { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14px; }
+  .ten { display: inline-flex; gap: 4px; }
+  .ten button { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--axis); background: var(--card); padding: 0; }
+  .ten button.on { background: var(--accent); border-color: var(--accent); }
+  .ten-txt { font-size: 13px; color: var(--text-2); }
+  .ten-txt b { color: var(--text); }
+  .pct-in { width: 4.2em; padding: 3px 6px; font-size: 13px; }
+  .s-step h2 small { font-weight: 400; color: var(--text-2); font-size: 13px; }
+  .s-label { color: var(--text-2); font-size: 14px; margin-top: 6px; }
+  .s-big-text { font-size: 40px; }
+  .s-warn { border-color: transparent; background: var(--warn-bg); }
+  .s-honest { margin: 0 4px; }
+  .s-my-list { width: 100%; max-width: 640px; padding: 10px 14px; }
+  .s-my-list ul { list-style: none; margin: 0; padding: 0; }
+  .s-my-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  .s-my-list li .muted { flex: 1; }
+  .tabs { display: inline-flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+  .tabs button[role="tab"] { border: 1px solid var(--line); background: var(--card); border-radius: 8px; padding: 6px 10px; font-size: 14px;
+                             max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); font-weight: 600; }
+  #s-variants { display: inline-flex; }
+  .goal input[type="checkbox"] { accent-color: var(--accent); }
+  pre.composite { font-size: 12px; max-height: 180px; overflow: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; margin: 0; }
   /* полоска с ответом внизу экрана — только когда колонки идут друг под другом */
   .s-sticky { display: none; }
   @media (max-width: 1099px) {
@@ -306,12 +349,12 @@
 <!-- ============================== Простой режим ============================== -->
 <div id="simple-view">
   <div class="toolbar">
-    <label class="field">Пример <select id="s-tpl" aria-label="Пример"></select></label>
-    <button class="btn" id="s-new">Начать заново</button>
-    <button class="btn" id="s-open" title="Открыть сохранённый файл .json">Открыть…</button>
-    <button class="btn" id="s-save" title="Сохранить ответы в файл .json">Сохранить</button>
-    <input type="file" id="s-open-file" accept=".json,application/json" hidden>
+    <button class="btn" id="s-new">＋ Новая ситуация</button>
+    <button class="btn" id="s-my" aria-haspopup="true">Мои расчёты</button>
+    <button class="btn" id="s-share" title="Скопировать ссылку на этот расчёт">🔗 Поделиться</button>
+    <span id="s-variants"></span>
   </div>
+  <div class="toolbar"><div class="card s-my-list" id="s-my-list" hidden></div></div>
   <main class="layout">
     <section class="pane" id="s-editor" aria-label="Ваша ситуация"></section>
     <section class="pane" id="s-results" aria-label="Ответ" aria-live="polite"></section>

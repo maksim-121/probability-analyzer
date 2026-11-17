@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 M32 = 0xFFFFFFFF
+MAX_REPEAT = 100000
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -224,6 +225,38 @@ def prepare_dist(d, who):
             m += q * pt.mean
             m2 += q * (pt.sd * pt.sd + pt.mean * pt.mean)
         return Dist("mixture", sample, None, m, math.sqrt(max(0.0, m2 - m * m)))
+    if t == "repeat":   # сумма N независимых значений; с «да / нет» внутри — число удачных попыток
+        n = d.get("times")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1 or n > MAX_REPEAT:
+            raise MCError(f"{who}: число повторов должно быть целым от 1 до {MAX_REPEAT}")
+        inner = prepare_dist(d.get("dist"), f"{who}, одно повторение")
+
+        def sample(rng):
+            s = 0.0
+            for _ in range(n):
+                s += inner.sample(rng)
+            return s
+
+        return Dist("repeat", sample, None, n * inner.mean, math.sqrt(n) * inner.sd)
+    if t == "walk":     # сколько шагов до цели (не дошли за max_steps -> max_steps + 1)
+        start, goal = _need(d, "start", who), _need(d, "goal", who)
+        mx = d.get("maxSteps", 1000)
+        if not isinstance(mx, int) or isinstance(mx, bool) or mx < 1 or mx > MAX_REPEAT:
+            raise MCError(f"{who}: предел шагов должен быть целым от 1 до {MAX_REPEAT}")
+        step = prepare_dist(d.get("step"), f"{who}, один шаг")
+        up = goal >= start
+
+        def sample(rng):
+            if (start >= goal) if up else (start <= goal):
+                return 0.0
+            pos = start
+            for k in range(1, mx + 1):
+                pos += step.sample(rng)
+                if (pos >= goal) if up else (pos <= goal):
+                    return float(k)
+            return float(mx + 1)
+
+        return Dist("walk", sample, None, math.nan, math.nan)
     if t in ("conditional", "rows"):
         raise MCError(f"{who}: этот тип нельзя использовать внутри ветки")
     raise MCError(f"{who}: неизвестный тип распределения «{t}»")

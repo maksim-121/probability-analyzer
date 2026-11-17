@@ -10,7 +10,8 @@ import json
 from pathlib import Path
 
 import engine_ref as E
-from cases import BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, MEETING, MEETING_DISCRETE, RAIN, RAIN_DISCRETE
+from cases import (ATTEMPTS, BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, GYM, MEETING, MEETING_DISCRETE,
+                   RAIN, RAIN_DISCRETE)
 
 OUT = Path(__file__).resolve().parent.parent / "tests" / "vectors.js"
 
@@ -34,6 +35,8 @@ DIST_SPECS = [
     {"type": "triangular", "min": 0, "mode": 0, "max": 10},
     {"type": "normal", "mean": 40, "sd": 8},
     {"type": "data", "values": [3, 1, 4, 1, 5, 9, 2, 6]},
+    {"type": "repeat", "times": 7, "dist": {"type": "yesno", "p": 0.4}},
+    {"type": "walk", "start": 92, "goal": 80, "step": {"type": "uniform", "min": -1.2, "max": 0.3}},
 ]
 
 
@@ -50,7 +53,7 @@ def dist_vectors():
 def run_vectors():
     out = []
     extra = [(t, 7) for t in E.load_templates() if t["id"] not in ("meeting", "dice")]
-    extra += [(CHAIN, 8), (RAIN_DISCRETE, 9), (E.independent_version(RAIN), 10)]
+    extra += [(CHAIN, 8), (RAIN_DISCRETE, 9), (E.independent_version(RAIN), 10), (ATTEMPTS, 11), (GYM, 12)]
     for sc, seed in [(MEETING, 20261117), (DICE, 99), (COMMUTE, 3), (MEETING_DISCRETE, 5)] + extra:
         m = E.compile_scenario(sc)
         cols, res, ev = E.run(m, RUN_N, seed)

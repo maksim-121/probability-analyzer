@@ -82,7 +82,10 @@
   };
 
   function typeOptions(current, allowRows) {
-    return Object.entries(MC.DIST_NAMES)
+    // составной тип из простого режима (повтор, шагов до цели, смесь) показываем, но выбрать его вручную нельзя
+    const composite = !MC.DIST_NAMES[current] && MC.COMPOSITE_NAMES[current]
+      ? `<option value="${current}" selected disabled>${MC.COMPOSITE_NAMES[current]}</option>` : '';
+    return composite + Object.entries(MC.DIST_NAMES)
       .filter(([k]) => allowRows || k !== 'rows')
       .map(([k, v]) => `<option value="${k}"${current === k ? ' selected' : ''}>${v}</option>`).join('');
   }
@@ -130,6 +133,12 @@
           <div class="hint" data-count="${P}">${nr} строк × ${cols.length} столб.: ${esc(cols.join(', '))}.</div>
           ${csvControls(P, 'возьмёт все числовые столбцы и «да / нет» (→ 1 / 0)')}`;
       }
+      case 'repeat':
+      case 'walk':
+      case 'mixture':
+        // составной тип из простого режима: показываем, что внутри, но правится он в простом режиме
+        return `<p class="hint">«${MC.COMPOSITE_NAMES[d.type]}» — собрано в простом режиме. Здесь только для просмотра:</p>
+          <pre class="mono composite">${esc(JSON.stringify(d, null, 1))}</pre>`;
       default:
         return `<div class="fields">${(PARAM_FIELDS[d.type] || []).map(([k, lbl]) => `
           <label class="field">${lbl}<input inputmode="decimal" data-path="${P}.${k}" data-kind="num" value="${fmtIn(d[k])}"></label>`).join('')}</div>`;
@@ -643,7 +652,7 @@
   async function openScenario(file) {
     try {
       const data = JSON.parse(await fileText(file));
-      if (data && data.simple && Array.isArray(data.simple.items)) {     // файл из простого режима
+      if (data && data.simple && data.simple.scheme) {     // файл из простого режима
         PASimple.load(data.simple);
         setMode('simple');
         return;
@@ -809,7 +818,7 @@
         const idx = new Map(bins.map((b, k) => [b.from, k]));
         for (let i = 0; i < run.n; i++) if (run.event[i]) { const k = idx.get(run.result[i]); if (k !== undefined) bins[k].yes++; }
       } else {
-        const lo = bins[0].from, hi = bins[K - 1].to, w = bins[0].to - bins[0].from;
+        const lo = h.lo, hi = h.hi, w = h.width;
         for (let i = 0; i < run.n; i++) {
           const v = run.result[i];
           if (!run.event[i] || !(v >= lo && v <= hi)) continue;

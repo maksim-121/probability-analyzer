@@ -8,21 +8,49 @@
 
 *English summary is at the end of this page.*
 
-![Простой режим](docs/screenshots/simple.jpg)
+![Простой режим: успеть на самолёт](docs/screenshots/simple.jpg)
 
-## Два режима
+## Для кого и зачем
 
-**Простой режим** — для обычного человека, открывается по умолчанию. Ни формул, ни терминов, только четыре вопроса:
-1. Что хотите узнать: «начнётся ли вовремя» (ждём всех) или «уложимся ли в срок» (этапы друг за другом)?
-2. Кто или что может задержать и как: «бывает по-разному» (варианты в процентах), «минимум / обычно / максимум» или «иногда случается»?
-3. Есть ли общая причина, из-за которой задерживаются сразу несколько (например, дождь)?
-4. Что считаем успехом?
+Для обычного человека, которому нужно решить: **успею ли? хватит ли? уложусь ли? сколько закладывать?**
+Готовых событий нет — человек описывает свою ситуацию сам, а приложение подсказывает, как.
 
-Ответ одной фразой — «в 54 случаях из 100», — плюс «чего ждать» и «что поможет больше всего». Ответ пересчитывается сам, пока человек меняет цифры. На телефоне он всегда виден в полоске внизу экрана.
+**Простой режим** (открывается по умолчанию) начинается с вопроса «Какая у вас ситуация?»:
 
-**Режим специалиста** — полный редактор: распределения, формулы, зависимости, загрузка CSV, графики, точный перебор. Из простого режима туда можно перейти кнопкой «Открыть в режиме специалиста»: там будет тот же сценарий, но со всеми формулами.
+| Схема | Как устроена | Например |
+|---|---|---|
+| 🧩 Из нескольких частей | части идут друг за другом, время или деньги складываются | успеть на самолёт, бюджет поездки, ремонт |
+| 👥 Ждём, пока будет готово всё | всё идёт одновременно, решает самое долгое | встреча, несколько дел сразу |
+| 📈 Иду к цели шаг за шагом | каждую неделю понемногу приближаюсь, иногда откатываюсь | жим 100 кг, похудение, накопления |
+| 🎯 Несколько попыток | каждая попытка удаётся или нет | собеседования, подходы, экзамены |
 
-| Режим специалиста | Простой режим на телефоне |
+Про каждое неизвестное число приложение спрашивает **«Что вы о нём знаете?»** и не требует думать процентами:
+- **знаю точно** — «билеты 18 000 ₽»;
+- **примерно** — «обычно 40 минут, бывает от 30 до 70»;
+- **может случиться** — «пробка бывает ●●●○○○○○○○ 3 раза из 10, и тогда +10–30 мин»;
+- **как было раньше** — «последние разы: 35 42 38 60 41» (по прошлым значениям).
+
+Ответ — человеческими словами и единицами, пересчитывается сам:
+- «**92 из 100** — почти наверняка успеете»;
+- **какой нужен запас**: «чтобы успеть в 9 случаях из 10 — закладывайте **1 ч 58 мин**»;
+- «если всё пойдёт как обычно — 1 ч 15 мин, но так бывает только в 7 случаях из 100»;
+- **что поможет больше всего**: «Пробка — такого не случается → 99 из 100»;
+- для целей — «скорее всего дойдёте за **46 недель (≈ 10,5 мес.)**», для попыток — «нужно примерно 15 собеседований».
+
+Ещё в простом режиме:
+- **«Сравнить с другим вариантом»** — варианты А и Б рядом (такси или автобус, 2 или 3 тренировки);
+- **«Мои расчёты»** — всё сохраняется в браузере само, можно вернуться и обновить цифры;
+- **«Поделиться»** — расчёт зашивается в ссылку;
+- **проверка здравого смысла** — «с такими цифрами цель не приближается», «данных мало — ответ примерный».
+
+| Выбор ситуации | Цель шаг за шагом: жим 100 кг |
+|---|---|
+| ![Выбор ситуации](docs/screenshots/simple_start.jpg) | ![Жим 100 кг](docs/screenshots/simple_goal.jpg) |
+
+**Режим специалиста** — полный редактор для преподавателя и сложных случаев: распределения, формулы, зависимости, загрузка CSV,
+«торнадо», сходимость, точный перебор. Из простого режима туда ведёт кнопка «Открыть в режиме специалиста» — там тот же расчёт со всеми формулами.
+
+| Режим специалиста | Телефон |
 |---|---|
 | ![Режим специалиста](docs/screenshots/main.jpg) | ![Телефон](docs/screenshots/simple_mobile.jpg) |
 
@@ -97,9 +125,9 @@
 
 | Проверка | Что сравнивается | Итог |
 |---|---|---|
-| Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 42 теста |
-| JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 52 проверки |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 87 проверок |
+| Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 49 тестов |
+| JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 56 проверок |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 93 проверки |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -114,11 +142,11 @@
 
 ```
 cd reference
-python -m unittest tests_ref          # эталон: 42 теста
+python -m unittest tests_ref          # эталон: 49 тестов
 python make_vectors.py                # ответы эталона для сверки
 cd ..
-python tests/run_selftest.py          # движок в браузере: 52 проверки
-python tests/run_selftest.py uitest   # страница: 87 проверок
+python tests/run_selftest.py          # движок в браузере: 56 проверок
+python tests/run_selftest.py uitest   # страница: 93 проверки
 ```
 
 ## Структура
@@ -158,9 +186,9 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
-- Two modes: a **simple mode** for everyone (four plain-language questions, no formulas; the answer is one sentence like "54 times out of 100" plus "what would help most") and an **expert mode** with the full editor.
+- **Simple mode** for everyone: pick one of four situation types (parts that add up, wait for everything, step by step towards a goal such as a 100 kg bench press, several attempts), describe each number the way you know it (exactly / roughly / may happen N times out of 10 / past values), and get a plain answer: "92 times out of 100", the buffer you need for 9 out of 10, what helps most. Variants A/B side by side, saved calculations, share by link. **Expert mode** keeps the full editor.
 - A scenario is built from random factors (6 distribution types), formulas, a result and an event. Example: will a meeting start on time given bus delays, lunch overruns and a busy meeting room? 53.94 % ± 0.10 % on 1M runs, exact answer 54 %.
 - Dependent factors: a factor can depend on another one ("rain → bus and lunch delays"), and a dataset can be sampled whole-row so real-world correlations are kept. The app compares the result with a naive model that ignores dependencies. Example: with a common cause the project meets the 40-day deadline in 82.8 % of cases, while the naive model promises 88.4 %.
 - Results: probability with a 95 % CI, exact enumeration when all factors are discrete, percentiles, histogram, tornado sensitivity chart, convergence chart.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 42 Python tests, 52 engine checks and 87 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 49 Python tests, 56 engine checks and 93 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/

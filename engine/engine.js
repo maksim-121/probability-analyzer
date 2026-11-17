@@ -13,7 +13,8 @@
  * Порядок случайных чисел (важно для сверки с Python): прогон за прогоном; внутри прогона
  * факторы по порядку; таблица / да-нет / равномерное / треугольное / данные / строки берут 1 число,
  * нормальное — 2 (Бокс — Мюллер), смесь — 1 + сколько возьмёт выбранная часть,
- * «зависит от» — сколько возьмёт выбранная ветка.
+ * «зависит от» — сколько возьмёт выбранная ветка, повтор N раз — N раз по внутреннему распределению,
+ * «шагов до цели» — по одному шагу, пока не дойдём до цели (или до предела шагов).
  *
  * Работает в браузере (window.MC) и в Node (module.exports).
  */
@@ -75,6 +76,14 @@
     data: 'Из данных',
     rows: 'Строки таблицы (дни целиком)',
   };
+  // Составные типы (собираются простым режимом; в режиме специалиста показываются только для чтения)
+  const COMPOSITE_NAMES = {
+    repeat: 'Повтор N раз (сумма)',
+    walk: 'Шагов до цели',
+    mixture: 'Смесь распределений',
+    conditional: 'Зависит от',
+  };
+  const MAX_REPEAT = 100000;
 
   const isNum = x => typeof x === 'number' && Number.isFinite(x);
 
@@ -184,6 +193,35 @@
         let m = 0, m2 = 0;
         parts.forEach((pt, j) => { const q = w[j] / total; m += q * pt.mean; m2 += q * (pt.sd * pt.sd + pt.mean * pt.mean); });
         return { type: 'mixture', sample, support: null, mean: m, sd: Math.sqrt(Math.max(0, m2 - m * m)) };
+      }
+      case 'repeat': {
+        // Сумма N независимых значений одного распределения. С «да / нет» внутри — число удачных попыток из N.
+        const n = d.times;
+        if (!Number.isInteger(n) || n < 1 || n > MAX_REPEAT)
+          throw new MCError(`${who}: число повторов должно быть целым от 1 до ${MAX_REPEAT}`);
+        const inner = prepareDist(d.dist, `${who}, одно повторение`);
+        const sample = rng => { let s = 0; for (let k = 0; k < n; k++) s += inner.sample(rng); return s; };
+        return { type: 'repeat', sample, support: null, mean: n * inner.mean, sd: Math.sqrt(n) * inner.sd };
+      }
+      case 'walk': {
+        // Сколько шагов до цели: от start каждый шаг прибавляет значение step, пока не дойдём до goal.
+        // Цель выше старта — ждём «>= goal», ниже — «<= goal». Не дошли за maxSteps -> maxSteps + 1.
+        const start = needNum(d, 'start', who), goal = needNum(d, 'goal', who);
+        const max = d.maxSteps === undefined ? 1000 : d.maxSteps;
+        if (!Number.isInteger(max) || max < 1 || max > MAX_REPEAT)
+          throw new MCError(`${who}: предел шагов должен быть целым от 1 до ${MAX_REPEAT}`);
+        const step = prepareDist(d.step, `${who}, один шаг`);
+        const up = goal >= start;
+        const sample = rng => {
+          if (up ? start >= goal : start <= goal) return 0;
+          let pos = start;
+          for (let k = 1; k <= max; k++) {
+            pos += step.sample(rng);
+            if (up ? pos >= goal : pos <= goal) return k;
+          }
+          return max + 1;
+        };
+        return { type: 'walk', sample, support: null, mean: NaN, sd: NaN, maxSteps: max };
       }
       case 'conditional':
       case 'rows':
@@ -833,18 +871,32 @@
       bins.forEach(b => { b.p = b.count / m; });
       return { discrete: true, bins, below: 0, above: 0 };
     }
-    const lo = quantile(sorted, 0.005), hi = quantile(sorted, 0.995);
-    const w = (hi - lo) / maxBins || 1;
-    const bins = Array.from({ length: maxBins }, (_, j) => ({ from: lo + j * w, to: lo + (j + 1) * w, count: 0 }));
+    // Целые значения (недели, попытки): столбик охватывает целые числа, иначе часть столбиков
+    // получала бы по два числа, а часть по одному — и гистограмма выглядела бы «зубчатой».
+    let integer = true;
+    for (let i = 0; i < m && integer; i++) integer = Number.isInteger(sorted[i]);
+    let lo, hi, w, K;
+    if (integer) {
+      lo = Math.floor(quantile(sorted, 0.005)); hi = Math.ceil(quantile(sorted, 0.995));
+      w = Math.max(1, Math.ceil((hi - lo + 1) / maxBins)); K = Math.ceil((hi - lo + 1) / w);
+    } else {
+      lo = quantile(sorted, 0.005); hi = quantile(sorted, 0.995);
+      w = (hi - lo) / maxBins || 1; K = maxBins;
+    }
+    const bins = Array.from({ length: K }, (_, j) => {
+      const from = lo + j * w, to = lo + (j + 1) * w;
+      return { from, to, count: 0, label: integer ? (w === 1 ? `${from}` : `${from}–${to - 1}`) : undefined };
+    });
     let below = 0, above = 0;
     for (let i = 0; i < m; i++) {
       const v = sorted[i];
       if (v < lo) below++;
       else if (v > hi) above++;
-      else bins[Math.min(maxBins - 1, Math.floor((v - lo) / w))].count++;
+      else bins[Math.min(K - 1, Math.floor((v - lo) / w))].count++;
     }
     bins.forEach(b => { b.p = b.count / m; });
-    return { discrete: false, bins, below: below / m, above: above / m };
+    // lo / hi / width — чтобы страница могла разложить по тем же столбикам свои отметки (событие «да / нет»)
+    return { discrete: false, integer, bins, lo, hi, width: w, below: below / m, above: above / m };
   }
 
   /** Сколько прогонов нужно, чтобы погрешность вероятности p была не больше ±half (95%). */
@@ -855,7 +907,7 @@
   const MC = {
     MCError, Rng, DIST_NAMES, prepareDist, parse, evalFormula, compile, createRun, run, summarize,
     sensitivity, exact, histogram, quantile, proportion, runsNeeded, PCTS, independentVersion, dependentsOf,
-    MAX_BRANCHES,
+    MAX_BRANCHES, COMPOSITE_NAMES, MAX_REPEAT,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = MC;
   else root.MC = MC;

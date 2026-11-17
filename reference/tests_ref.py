@@ -12,7 +12,7 @@ import math
 import unittest
 
 import engine_ref as E
-from cases import (BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, MEETING, MEETING_DISCRETE, RAIN,
+from cases import (ATTEMPTS, BAD_FORMULAS, CHAIN, COMMUTE, DICE, FORMULAS, GYM, MEETING, MEETING_DISCRETE, RAIN,
                    RAIN_DISCRETE, TEMPLATES)
 
 
@@ -399,6 +399,68 @@ class TestDependent(unittest.TestCase):
         m, cols, _, _ = self.mc(TEMPLATES["meeting_days"], 3000, 1)
         names = [i["name"] for i in E.sensitivity(m, cols, 3000, 1)["items"]]
         self.assertEqual(sorted(names), sorted(["Автобус", "Обед", "Переговорка"]))   # «Дождь» и «День» скрыты
+
+
+class TestComposite(unittest.TestCase):
+    """Повтор N раз (попытки) и «сколько шагов до цели» (спорт, накопления)."""
+
+    def sample(self, spec, n, seed=3):
+        d = E.prepare_dist(spec, "тест")
+        rng = E.Rng(seed)
+        return d, [d.sample(rng) for _ in range(n)]
+
+    def test_walk_constant_step(self):
+        _, xs = self.sample({"type": "walk", "start": 0, "goal": 10, "step": {"type": "uniform", "min": 1, "max": 1}}, 50)
+        self.assertEqual(set(xs), {10.0})
+        _, xs = self.sample({"type": "walk", "start": 10, "goal": 0, "step": {"type": "uniform", "min": -1, "max": -1}}, 50)
+        self.assertEqual(set(xs), {10.0}, "вниз (похудение) тоже считается")
+        _, xs = self.sample({"type": "walk", "start": 5, "goal": 5, "step": {"type": "yesno", "p": 0.5}}, 10)
+        self.assertEqual(set(xs), {0.0}, "уже на цели — 0 шагов")
+
+    def test_walk_negative_binomial(self):
+        # шаг +1 с шансом 0,25, иначе 0; цель 5 -> число шагов ~ отрицательное биномиальное: среднее 20, дисперсия 60
+        n = 40_000
+        _, xs = self.sample({"type": "walk", "start": 0, "goal": 5, "step": {"type": "yesno", "p": 0.25}}, n)
+        close_mc(self, sum(xs) / n, 20, math.sqrt(60 / n), what="среднее число шагов")
+
+    def test_walk_unreachable(self):
+        _, xs = self.sample({"type": "walk", "start": 0, "goal": 1, "maxSteps": 50, "step": {"type": "uniform", "min": 0, "max": 0}}, 20)
+        self.assertEqual(set(xs), {51.0}, "не дошли — предел + 1")
+
+    def test_repeat_binomial(self):
+        n = 60_000
+        d, xs = self.sample({"type": "repeat", "times": 10, "dist": {"type": "yesno", "p": 0.3}}, n)
+        self.assertAlmostEqual(d.mean, 3)
+        close_mc(self, sum(xs) / n, 3, math.sqrt(2.1 / n), what="среднее число удач")
+        p5 = 1 - sum(math.comb(10, k) * 0.3 ** k * 0.7 ** (10 - k) for k in range(5))
+        close_mc(self, sum(1 for x in xs if x >= 5) / n, p5, math.sqrt(p5 * (1 - p5) / n), what="P(хотя бы 5)")
+
+    def test_repeat_sum(self):
+        d, _ = self.sample({"type": "repeat", "times": 4, "dist": {"type": "triangular", "min": 0, "mode": 3, "max": 6}}, 10)
+        self.assertAlmostEqual(d.mean, 12)
+
+    def test_scenarios(self):
+        m = E.compile_scenario(ATTEMPTS)
+        _, res, ev = E.run(m, 30_000, 1)
+        p5 = 1 - sum(math.comb(10, k) * 0.3 ** k * 0.7 ** (10 - k) for k in range(5))
+        close_mc(self, sum(ev) / 30_000, p5, math.sqrt(p5 * (1 - p5) / 30_000), what="сценарий попыток")
+        self.assertIsNone(E.exact(m))
+        m = E.compile_scenario(GYM)
+        _, res, ev = E.run(m, 3000, 1)
+        self.assertTrue(all(1 <= r <= 521 for r in res))
+
+    def test_bad(self):
+        bad = [
+            {"type": "repeat", "times": 0, "dist": {"type": "yesno", "p": 0.5}},
+            {"type": "repeat", "times": 2.5, "dist": {"type": "yesno", "p": 0.5}},
+            {"type": "repeat", "times": 10},
+            {"type": "walk", "start": 0, "goal": 10},
+            {"type": "walk", "start": 0, "goal": 10, "maxSteps": 0, "step": {"type": "yesno", "p": 0.5}},
+            {"type": "walk", "goal": 10, "step": {"type": "yesno", "p": 0.5}},
+        ]
+        for spec in bad:
+            with self.assertRaises(E.MCError, msg=str(spec)):
+                E.prepare_dist(spec, "тест")
 
 
 if __name__ == "__main__":
