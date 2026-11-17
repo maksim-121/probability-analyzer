@@ -8,7 +8,7 @@
 'use strict';
 const out = [];
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-const check = (name, ok, detail = '') => out.push({ name, ok: !!ok, detail: String(detail) });
+const check = (name, ok, detail = '') => { out.push({ name, ok: !!ok, detail: String(detail) }); document.title = `… ${out.length} ${ok ? '✓' : '✗'} ${name} — ${String(detail).slice(0, 120)}`; };
 async function until(fn, ms = 20000) {
   const t0 = Date.now();
   while (Date.now() - t0 < ms) { try { const v = fn(); if (v) return v; } catch (e) {} await sleep(50); }
@@ -276,90 +276,109 @@ async function until(fn, ms = 20000) {
   const inp = (el, v) => { el.value = v; el.dispatchEvent(new w2.Event('input', { bubbles: true })); };
   const ready = () => until(() => big() && ideasReady(), 60000);
 
-  // 18. стартовый экран
+  const pick = (el, v) => { el.value = v; el.dispatchEvent(new w2.Event('change', { bubbles: true })); };
+  const errAt = k => ((q(`[data-err="${k}"]`) || {}).textContent || '');
+
+  // 18. первый заход: сразу пример из задания — совещание (транспорт, обед, переговорка)
   await goSimple('#simple=new');
   try { w2.localStorage.clear(); } catch (e) {}
-  check('Простой режим: «Что вы хотите узнать?» — поле вопроса, 10 похожих вопросов, 5 схем',
-    !!q('#s-q') && qa('.chip').length === 10 && qa('.scheme').length === 5 && /Что вы хотите узнать/.test(q('#s-editor').textContent));
+  check('Стартовый экран: «Конструктор вероятностей», «Начать с нуля», 6 примеров, 3 особых расчёта',
+    !!q('[data-s-act="blank-b"]') && qa('[data-s-act="example-b"]').length === 6 && qa('.scheme').length === 3 &&
+    /Конструктор вероятностей/.test(q('#s-editor').textContent) && !q('#s-q'));
+  await goSimple('');
+  await ready();
+  // P = P(транспорт ≤ 5) · P(обед ≤ 10) · P(переговорка свободна) = 0,8 · 0,9 · 0,75 = 0,54
+  check('Первый заход: пример из задания, 4 фактора, 3 расчёта, 54 из 100 (точно 0,8·0,9·0,75)',
+    qa('.s-item:not(.step)').length === 4 && qa('.s-item.step').length === 3 && /^54 из 100/.test(big()) &&
+    /Задержка совещания ≤ 5 мин/.test(q('.s-answer').textContent), big());
+  check('Ответ про итог: «скорее всего ≈ …; в 8 случаях из 10 — от … до …», порог на 9 из 10',
+    /«Задержка совещания» скорее всего ≈ \d+ мин; в 8 случаях из 10 — от \d+ мин до \d+ мин/.test(resText()) &&
+    /порог должен быть не меньше \d+ мин/.test(resText()), (resText().match(/«Задержка совещания» скорее[^.]*\./) || [''])[0]);
+  check('Что поможет: «Переговорка занята — всегда «нет»» (72 из 100)', /Переговорка занята — всегда «нет»/.test(resText()) &&
+    /72 из 100/.test(q('.ideas').textContent), q('.ideas').textContent.replace(/\s+/g, ' ').slice(0, 160));
+  await until(() => /Проверка на оптимизм: если всё на четверть хуже/.test(resText()), 30000);
+  check('Проверка на оптимизм для конструктора: шанс ниже', (() => {
+    const m = resText().match(/на четверть хуже, чем вы думаете, — (\d+) из 100/); return m && +m[1] < 54; })(),
+    (resText().match(/Проверка на оптимизм[^.]*\./) || [''])[0]);
+  check('Расчёты понятны словами: «если … = да», «самое большое из», «не меньше 0»',
+    qa('[data-s="steps.1.op"]')[0].value === 'if' && qa('[data-s="steps.2.op"]')[0].value === 'max' && q('[data-s="steps.0.clamp"]').checked);
+  // кружочки «да»: 25 % -> первый кружок (1 из 10) -> ещё раз (0 — никогда) -> 72 из 100
+  q('[data-s-act="b-open"][data-key="0.f2"]').click();
+  q('[data-s-act="ten"][data-p="factors.2.v.pct"][data-n="1"]').click();
+  q('[data-s-act="ten"][data-p="factors.2.v.pct"][data-n="1"]').click();
+  await until(() => /^72 из 100/.test(big()), 30000);
+  check('Переговорка «да» 0 из 10 → 72 из 100', /^72 из 100/.test(big()) && q('input[data-s="factors.2.v.pct"]').value === '0', big());
 
-  // 18а. вопрос своими словами: «какая вероятность найти новую работу до нового года»
-  q('#s-q').value = 'какая вероятность найти новую работу до нового года';
-  q('#s-ask').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
-  await until(() => big() && ideasReady(), 60000);
-  check('Вопрос про работу: «похоже, вы ищете работу», цепочка «отклики → собеседование → оффер → подходит»',
-    /вы ищете работу/.test(q('.s-say').textContent) && /Сколько откликов вы отправляете за неделю/.test(q('#s-editor').textContent) && /Из 10 откликов на сколько зовут на собеседование/.test(q('#s-editor').textContent) && /Из 10 офферов сколько вам подойдут/.test(q('#s-editor').textContent) &&
-    /заканчивается оффером/.test(q('#s-editor').textContent), q('.s-say') && q('.s-say').textContent);
-  check('Срок понят как 31 декабря, подсказка «не знаете?» есть', q('input[type="date"]').value.endsWith('-12-31') && !!q('.s-tip'),
-    q('input[type="date"]').value);
-  check('Ответ: «N из 100 … найдёте работу», «чтобы найти работу … откликов — примерно N в неделю», путь «из 100 откликов»',
-    / из 100/.test(big()) && /найдёте работу/.test(q('.s-answer').textContent) && /Чтобы найти работу .* отклик\S* — примерно \d+ в неделю/.test(resText()) && /Из 100 откликов в среднем: 30 собеседований → 4,5 офферов → 3,15 подходящих/.test(resText()),
-    (resText().match(/Чтобы найти[^.]*\./) || [''])[0]);
-  check('Что поможет: слабые звенья цепочки — отклики, приглашения, собеседования, условия', /\+5 откликов в неделю/.test(resText()) && /Зовут чаще/.test(resText()) &&
-    /Собеседования удачнее/.test(resText()) && /Срок на месяц позже/.test(resText()));
-  const fon = q('[data-s="until.funnel.on"]'); fon.checked = false; fon.dispatchEvent(new w2.Event('change', { bubbles: true }));
-  await until(() => /собеседовани\S* — примерно \d+ в неделю/.test(resText()) && ideasReady(), 60000);
-  check('Галочка «считать от откликов» снята: вопрос «Сколько собеседований бывает за неделю?»',
-    /Сколько собеседований бывает за неделю/.test(q('#s-editor').textContent) && /собеседовани\S* — примерно \d+ в неделю/.test(resText()));
-  // ноль кружочками: повторный щелчок по первому кружку -> «0 из 10» -> честно «никогда»
-  q('[data-s-act="ten"][data-p="until.pct"][data-n="1"]').click();
-  check('Первый кружок: «1 из 10»', q('input[data-s="until.pct"]').value === '10' && /1 из 10/.test(q('.ten-txt').textContent));
-  q('[data-s-act="ten"][data-p="until.pct"][data-n="1"]').click();
-  await until(() => q('.s-fix'), 10000);
-  check('Ещё раз по первому кружку: «0 из 10» → «Так не получится никогда»', q('input[data-s="until.pct"]').value === '0' &&
-    /0 из 10/.test(q('.ten-txt').textContent) && /Так не получится никогда/.test(resText()), resText().slice(0, 80));
-  q('[data-s-act="ten"][data-p="until.pct"][data-n="2"]').click();
-  await until(() => big(), 30000);
-  const dateIn = q('input[type="date"]');
-  dateIn.value = '2020-01-01'; dateIn.dispatchEvent(new w2.Event('change', { bubbles: true }));
-  await until(() => q('.s-fix'), 10000);
-  check('Срок в прошлом: «Дата срока уже прошла»', /Дата срока уже прошла/.test(resText()));
-  q('[data-s-act="change-scheme"]').click();
-  q('#s-q').value = 'будет ли завтра снег';
-  q('#s-ask').dispatchEvent(new w2.Event('submit', { bubbles: true, cancelable: true }));
-  check('Непонятный вопрос: честно «Не понял, как посчитать» и выбор схем', /Не понял, как посчитать/.test(q('#s-editor').textContent) && qa('.scheme').length === 5);
-  q('[data-s-act="ask"][data-q="Похудею ли до 80 кг к лету?"]').click();
-  await until(() => big(), 60000);
-  check('Похожий вопрос кнопкой: «Похудею ли до 80 кг к лету?» → цель 80 кг, срок 1 июня', /вы худеете/.test(q('.s-say').textContent) &&
-    q('[data-s="goal.target"]').value === '80' && /-06-01$/.test(q('input[type="date"]').value), q('input[type="date"]') && q('input[type="date"]').value);
-  q('#s-new').click();
-  check('Стартовый экран: режим специалиста скрыт, кнопки «Сравнить» нет',
-    d2.body.dataset.mode === 'simple' && q('#expert-view').hidden && !q('[data-s-act="compare"]'));
+  // 18а. примеры: дождь (общая причина) и кубики (точный ответ)
+  q('[data-s-act="to-start"]').click();
+  q('[data-s-act="example-b"][data-id="rain"]').click();
+  await ready();
+  await until(() => /Почему важна общая причина/.test(resText()), 30000);
+  check('Дождь: 53 из 100 (точно 52,76 %), «Почему важна общая причина» — без связи 51',
+    /^53 из 100/.test(big()) && /Почему важна общая причина[^]*?51 из 100/.test(resText()), big());
+  check('Дождь: у транспорта отмечено «когда «Дождь» — по-другому»', /когда «Дождь» — по-другому/.test(q('#s-editor').textContent));
+  q('[data-s-act="to-start"]').click();
+  q('[data-s-act="example-b"][data-id="dice"]').click();
+  await ready();
+  check('Два кубика: 17 из 100, точный перебор 36 вариантов = 16,67 % (6 из 36)', /^17 из 100/.test(big()) &&
+    /полным перебором 36 вариантов: 16,67 %/.test(resText()), big());
 
-  // 19. своя ситуация «из частей» с нуля: 30 мин точно + «бывает 5 из 10 ещё 10 мин»; успею за 35? -> 50 из 100
-  q('[data-s-act="scheme"][data-scheme="parts"]').click();
+  // 19. с нуля: «Сборы» ровно 30 мин + «Фактор 2» бывает 5 из 10 ещё 10 мин; сумма ≤ 35 -> 50 из 100
+  q('[data-s-act="to-start"]').click();
+  q('[data-s-act="blank-b"]').click();
   await until(() => big(), 30000);
-  check('Новая ситуация «из частей»: одна часть, ответ сразу посчитан', qa('.s-item').length === 1 && !!big(), big());
-  inp(q('[data-s="items.0.name"]'), 'Сборы');
-  q('[data-s-act="know"][data-p="items.0"][data-know="exact"]').click();
-  inp(q('[data-s="items.0.v.exact"]'), '30');
-  q('[data-s-act="add"]').click();
-  q('[data-s-act="know"][data-p="items.1"][data-know="maybe"]').click();
-  q('[data-s-act="ten"][data-p="items.1.v.pct"][data-n="5"]').click();
-  inp(q('[data-s="items.1.v.from"]'), '10');
-  inp(q('[data-s="items.1.v.to"]'), '10');
-  inp(q('[data-s="limit.value"]'), '35');
+  check('«Начать с нуля»: один фактор открыт, итог — он сам, ответ сразу', qa('.s-item').length === 1 && !!q('[data-s="factors.0.v.usual"]') && !!big(), big());
+  check('Типы факторов: точно, примерно, любое от–до, может случиться, да / нет, варианты, по данным',
+    qa('[data-s-act="know"][data-p="factors.0"]').map(b => b.textContent).join('|') === 'Точно|Примерно|Любое от–до|Может случиться|Да / нет|Варианты|По данным');
+  inp(q('[data-s="factors.0.name"]'), 'Сборы');
+  q('[data-s-act="know"][data-p="factors.0"][data-know="exact"]').click();
+  inp(q('[data-s="factors.0.v.exact"]'), '30');
+  q('[data-s-act="b-add-f"]').click();
+  q('[data-s-act="know"][data-p="factors.1"][data-know="maybe"]').click();
+  q('[data-s-act="ten"][data-p="factors.1.v.pct"][data-n="5"]').click();
+  inp(q('[data-s="factors.1.v.from"]'), '10');
+  inp(q('[data-s="factors.1.v.to"]'), '10');
+  q('[data-s-act="b-add-s"]').click();
+  check('«+ Добавить расчёт»: сумма всех факторов, итог и условие — на него', q('[data-s="steps.0.op"]').value === 'sum' &&
+    qa('[data-s-act="b-arg"].on').length === 2 && q('[data-s="result"]').value === 's1' && q('[data-s="success.ref"]').value === 's1');
+  inp(q('[data-s="success.value"]'), '35');
   await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
-  check('«Знаю точно» + «может случиться» (5 из 10): 50 из 100', /^50 из 100/.test(big()), big());
-  check('Кружочки: «5 из 10», в поле 50 %', /5 из 10/.test(q('.ten-txt').textContent) && q('input[data-s="items.1.v.pct"]').value === '50');
-  check('Запас в человеческих единицах: «чтобы успеть … закладывайте 40 мин»', /Чтобы успеть в 9 случаях из 10 — закладывайте 40 мин/.test(resText()), (resText().match(/Чтобы[^.]*\./) || [''])[0]);
+  check('Сумма «ровно 30» + «может случиться 5 из 10 → 10»: ≤ 35 → 50 из 100', /^50 из 100/.test(big()), big());
+
+  // 19а. своя формула: прежний расчёт переходит в формулу, переименование правит формулу
+  pick(q('[data-s="steps.0.op"]'), 'formula');
+  check('«Своя формула»: подставилась прежняя сумма', q('[data-s="steps.0.formula"]').value === 'Сборы + Фактор_2', q('[data-s="steps.0.formula"]').value);
+  inp(q('[data-s="factors.1.name"]'), 'Пробка');
+  check('Переименовали «Фактор 2» → «Пробка»: формула поправилась сама', q('[data-s="steps.0.formula"]').value === 'Сборы + Пробка', q('[data-s="steps.0.formula"]').value);
+  inp(q('[data-s="steps.0.formula"]'), 'Сборы + Пробка + Кот');
+  await until(() => q('.s-fix'), 5000);
+  check('Неизвестное имя в формуле: вместо ответа «Чтобы посчитать, поправьте … неизвестное имя «Кот»»',
+    /Чтобы посчитать, поправьте/.test(resText()) && /неизвестное имя «Кот»/.test(resText()), resText().slice(0, 160));
+  inp(q('[data-s="steps.0.formula"]'), 'Сборы + Пробка');
+  await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
+  check('Формула исправлена — снова 50 из 100', /^50 из 100/.test(big()), big());
 
   // 20. ошибки — по-человечески
-  inp(q('[data-s="items.1.v.from"]'), '20');
-  check('«от» больше «до»: ошибка прямо у части', /«от» больше, чем «до»/.test(q('[data-err="1"]').textContent), q('[data-err="1"]').textContent);
+  inp(q('[data-s="factors.1.v.from"]'), '20');
+  check('«от» больше «до»: ошибка прямо у фактора', /«от» больше, чем «до»/.test(errAt('f1')), errAt('f1'));
   await until(() => q('.s-fix'), 5000);
-  check('Вместо ответа — «Чтобы посчитать, поправьте»', !!q('.s-fix'));
-  inp(q('[data-s="items.1.v.from"]'), '10');
+  inp(q('[data-s="factors.1.v.from"]'), '10');
+  q('[data-s-act="know"][data-p="factors.0"][data-know="table"]').click();
+  inp(q('[data-s="factors.0.v.rows.1.pct"]'), '40');
+  check('Варианты: проценты не 100 — «Итого 90 % — нужно 100 %» и ошибка у фактора',
+    /Итого 90 % — нужно 100 %/.test(q('[data-sum="factors.0.v"]').textContent) && /проценты в сумме 90 %/.test(errAt('f0')), errAt('f0'));
+  q('[data-s-act="know"][data-p="factors.0"][data-know="exact"]').click();
   await until(() => /^50 из 100/.test(big()) && ideasReady(), 30000);
 
-  // 21. «Готово» сворачивает часть в одну строку
-  q('[data-s-act="close"][data-k="0"]').click();
-  check('«Готово»: часть свернулась в строку «ровно 30 мин»', /ровно 30 мин/.test((q('.s-item.closed') || {}).textContent || ''));
+  // 21. «Готово» сворачивает фактор в одну строку
+  q('[data-s-act="b-close"][data-key="0.f0"]').click();
+  check('«Готово»: фактор свернулся в строку «ровно 30 мин»', /ровно 30 мин/.test((q('.s-item.closed') || {}).textContent || ''));
 
-  // 22. сравнение вариантов: в Б «бывает 2 из 10» -> 80 из 100, Б лучше
+  // 22. сравнение вариантов: в Б «Пробка» бывает 2 из 10 -> 80 из 100, Б лучше
   q('[data-s-act="compare"]').click();
   check('Вариант Б создан и открыт', qa('.tabs [role="tab"]').length === 2 && /Вариант Б/.test(q('.tabs [aria-selected="true"]').textContent));
-  q('[data-s-act="open"][data-k="1"]').click();
-  q('[data-s-act="ten"][data-p="items.1.v.pct"][data-n="2"]').click();
+  q('[data-s-act="b-open"][data-key="1.f1"]').click();
+  q('[data-s-act="ten"][data-p="factors.1.v.pct"][data-n="2"]').click();
   await until(() => /^80 из 100/.test(big()) && /Лучше вариант/.test(resText()), 40000);
   check('Б: 80 из 100, сравнение: «Лучше вариант Б»', /^80 из 100/.test(big()) && /Лучше вариант Б/.test(resText()), big());
 
@@ -374,6 +393,13 @@ async function until(fn, ms = 20000) {
   await goSimple(link.slice(link.indexOf('#')));
   await until(() => big(), 40000);
   check('Открыли по ссылке: те же 2 варианта', qa('.tabs [role="tab"]').length === 2 && /^(50|80) из 100/.test(big()), big());
+
+  // 24а. без условия успеха — просто каким бывает итог
+  await goSimple('#c=trip'); await ready();
+  check('Поездка: шанс «хватит 70 000 ₽» есть', / из 100/.test(big()) && /Всего ≤ 70\s000 ₽/.test(q('.s-answer').textContent), big());
+  q('[data-s="success.on"]').click();
+  await until(() => /«Всего» скорее всего/.test(resText()) && !/из 100/.test(big()), 30000);
+  check('Без галочки успеха: «Всего» скорее всего ≈ … ₽, советов «что поможет» нет', /\d ₽/.test(big()) && !/Что поможет/.test(resText()), big());
 
   // 25. пример «самолёт»: часы и минуты, «как обычно» бывает редко, сильнее всего — пробка
   await goSimple('#simple=plane'); await ready();
@@ -415,7 +441,7 @@ async function until(fn, ms = 20000) {
   // 29. «Новая ситуация» — снова выбор схемы
   q('[data-mode-btn="simple"]').click();
   q('#s-new').click();
-  check('«Новая ситуация»: снова «Что вы хотите узнать?»', qa('.scheme').length === 5 && !!q('#s-q'));
+  check('«Новая ситуация»: снова стартовый экран конструктора', qa('.scheme').length === 3 && !!q('[data-s-act="blank-b"]'));
 
   const passed = out.filter(r => r.ok).length, fail = out.find(r => !r.ok);
   document.title = (fail ? `FAIL ${passed}/${out.length}: ${fail.name} — ${fail.detail}` : `PASS ${passed}/${out.length}`) + ' | UI';

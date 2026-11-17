@@ -311,6 +311,17 @@
   .s-h4 { font-size: 14px; margin: 14px 0 4px; color: var(--text-2); font-weight: 600; }
   .opt { font-weight: 650; }
   .s-item { padding: 8px 10px; }
+  /* конструктор */
+  .unit-in { flex: none; width: 5.5em; }
+  .s-title { width: 100%; font-size: 16px; }
+  .chip.pick { font-size: 13px; padding: 5px 11px; color: var(--text-2); }
+  .chip.pick.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .chip.pick.on::before { content: '✓ '; }
+  .s-item.step .row select { flex: none; max-width: 15em; }
+  .s-item.step .inline select { max-width: 15em; }
+  .s-item.step .inline .n-in { width: 5em; }
+  .formula-in { width: 100%; }
+  .result-pick { margin-top: 4px; }
   .deadline { display: flex; flex-direction: column; gap: 6px; }
   .deadline .row2 { align-items: center; }
   .deadline input[type="date"] { font-size: 15px; }
@@ -350,6 +361,10 @@
   @media (max-width: 520px) {
     .opt-row .long { display: none; }
     .opt-row input { width: 4.2em; }
+    .s-item.step .row { flex-wrap: wrap; }
+    .s-item.step .row .s-name { flex: 1 1 100%; }
+    .s-item.step .row select { flex: 1; max-width: none; }
+    .unit-in { width: 4.2em; }
   }
   .runinfo { color: var(--muted); font-size: 12px; margin: 0; }
   .tip { position: fixed; z-index: 10; pointer-events: none; white-space: pre-line; max-width: 320px;
