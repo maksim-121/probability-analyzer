@@ -22,6 +22,8 @@ const PASimple = (() => {
   const KEY_CUR = 'probability-analyzer.simple.v2';
   const KEY_MY = 'probability-analyzer.my.v2';
   const N = 200000, N_IDEA = 50000, SEED = 20261117;
+  /** Сколько прогонов: если один прогон долгий (медленный темп — сотни шагов), прогонов меньше, чтобы не ждать. */
+  const nFor = (s, base) => Math.max(10000, Math.min(base, Math.floor(4e7 / Math.max(1, workPerRun(s)))));
 
   // ===================================================================================
   // Словарь
@@ -535,18 +537,19 @@ const PASimple = (() => {
   }
   const histHint = n => `${n} знач. Впишите через пробел, как было в прошлые разы.${n && n < 5 ? ' <b>Данных мало — ответ будет примерный.</b>' : ''}`;
 
-  function valueEditor(know, v, P, unit, opt = {}) {
+  /** Ввод одной фразой: «обычно [10], бывает от [5] до [15] мин». */
+  function valueEditor(know, v, P, unit) {
     const u = esc(unit);
-    const f = (key, label) => `<label class="field">${label}<input inputmode="decimal" data-s="${P}.${key}" data-num value="${fmtIn(v[key])}"></label>`;
-    if (know === 'exact') return `<div class="fields">${f('exact', `ровно${u ? ', ' + u : ''}`)}</div>`;
-    if (know === 'approx') return `<div class="fields">${f('usual', `обычно${u ? ', ' + u : ''}`)}${f('min', 'от')}${f('max', 'до')}</div>
-      <p class="hint">${opt.approxHint || 'Чаще всего выходит около «обычно», реже — ближе к краям.'}</p>`;
+    const n = (key, label) => `<input inputmode="decimal" data-s="${P}.${key}" data-num value="${fmtIn(v[key])}" aria-label="${label}">`;
+    if (know === 'exact') return `<div class="inline">ровно ${n('exact', 'Сколько')} ${u}</div>`;
+    if (know === 'approx') return `<div class="inline">обычно ${n('usual', 'Обычно')} ${u}</div>
+      <div class="inline">бывает от ${n('min', 'От')} до ${n('max', 'До')} ${u}</div>
+      <p class="hint">«От» и «до» — такие, чтобы вы удивились, если выйдет за них (бывает 1 раз из 10). Люди обычно ставят их слишком узко.</p>`;
     if (know === 'maybe') return `<div class="maybe"><span>Бывает</span> ${chanceCtl(`${P}.pct`, v.pct)}</div>
-      <div class="sentence">и тогда добавляет от <input inputmode="decimal" data-s="${P}.from" data-num value="${fmtIn(v.from)}" aria-label="От">
-      до <input inputmode="decimal" data-s="${P}.to" data-num value="${fmtIn(v.to)}" aria-label="До"> ${u}</div>`;
-    const n = v.history.filter(Number.isFinite).length;
+      <div class="inline">и тогда добавляет от ${n('from', 'От')} до ${n('to', 'До')} ${u}</div>`;
+    const cnt = v.history.filter(Number.isFinite).length;
     return `<textarea rows="2" class="mono" data-s="${P}.history" data-list placeholder="Например: 35 42 38 60 41" aria-label="Прошлые значения">${esc(v.history.map(fmtIn).join(' '))}</textarea>
-      <p class="hint" data-hist="${P}">${histHint(n)}</p>`;
+      <p class="hint" data-hist="${P}">${histHint(cnt)}</p>`;
   }
 
   function knowSeg(P, know, allowed = KNOW.map(x => x[0])) {
@@ -616,138 +619,89 @@ const PASimple = (() => {
     return k === 'time' ? 'Успею ли за' : k === 'money' ? 'Хватит ли' : 'Уложусь ли в';
   }
 
+  // Вопросы — одним компактным блоком; редкие настройки — под «Ещё настройки»
+  const Q = (no, title, body) => `<div class="q"><div class="q-t">${no ? `<span class="step-num">${no}</span>` : ''}<span>${title}</span></div>
+    <div class="q-c">${body}</div></div>`;
+  const more = inner => `<details class="card s-more"><summary>Ещё настройки</summary><div class="s-more-body">${inner}</div></details>`;
+  const titleField = s => `<label class="field grow">Название расчёта<input data-s="title" value="${esc(s.title)}"></label>`;
+  const numIn = (path, value, label, cls = '') => `<input inputmode="decimal" class="${cls}" data-s="${path}" data-num value="${fmtIn(value)}" aria-label="${label}">`;
+  const tip = text => (text ? `<p class="hint s-tip">💡 ${esc(text)}</p>` : '');
+
   function formParts(s) {
     const S = SCHEMES[s.scheme];
-    return `
-      <div class="card s-step">
-        <h2><span class="step-num">1</span><span>${S.itemsQ}</span></h2>
-        <div class="row2">
-          <label class="field grow">Как назовём<input data-s="title" value="${esc(s.title)}"></label>
-          <label class="field">В чём считаем${unitSelect('unit', s.unit)}</label>
-        </div>
-        <div class="items">${s.items.map(itemCard).join('')}</div>
-        <button class="btn add" data-s-act="add">${S.add}</button>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">2</span><span>Что вы хотите узнать?</span></h2>
-        <label class="goal"><input type="checkbox" data-s="limit.on"${s.limit.on ? ' checked' : ''}> ${limitText(s)}
-          <input inputmode="decimal" data-s="limit.value" data-num value="${fmtIn(s.limit.value)}" aria-label="Порог"${s.limit.on ? '' : ' disabled'}> ${esc(s.unit)}?</label>
-        <p class="hint">${s.limit.on ? 'Посчитаю шанс и сколько нужно заложить с запасом.' : 'Без галочки просто посчитаю, сколько скорее всего выйдет и какой нужен запас.'}</p>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">3</span><span>Есть общая причина? <small>необязательно</small></span></h2>
-        <label class="check"><input type="checkbox" data-s="cause.on"${s.cause.on ? ' checked' : ''}>
-          Иногда бывает что-то, из-за чего хуже становится сразу нескольким частям (например, дождь)</label>
+    return `<div class="card s-form">
+      ${Q(1, S.itemsQ, `<div class="items">${s.items.map(itemCard).join('')}</div>
+        <button class="btn add" data-s-act="add">${S.add}</button>`)}
+      ${Q(2, 'Что вы хотите узнать?', `<label class="goal"><input type="checkbox" data-s="limit.on"${s.limit.on ? ' checked' : ''}> ${limitText(s)}
+          ${numIn('limit.value', s.limit.value, 'Порог')} ${unitSelect('unit', s.unit)}</label>
+        <p class="hint">${s.limit.on ? 'Посчитаю шанс и какой нужен запас.' : 'Без галочки — сколько скорее всего выйдет и какой нужен запас.'}</p>`)}
+      ${Q(3, 'Есть общая причина? <small>необязательно</small>', `<label class="check"><input type="checkbox" data-s="cause.on"${s.cause.on ? ' checked' : ''}>
+          Иногда бывает что-то, из-за чего хуже сразу нескольким частям (например, дождь)</label>
         ${s.cause.on ? `<div class="row2"><label class="field grow">Что это<input data-s="cause.name" value="${esc(s.cause.name)}"></label></div>
           <div class="maybe"><span>Бывает</span> ${chanceCtl('cause.pct', s.cause.pct)}</div>
-          <p class="hint">Теперь у каждой части можно отметить «Когда «${esc(s.cause.name)}» — по-другому».</p>` : ''}
-      </div>`;
+          <p class="hint">Теперь у каждой части можно отметить «Когда «${esc(s.cause.name)}» — по-другому».</p>` : ''}`)}
+    </div>${more(`<div class="row2">${titleField(s)}</div>`)}`;
   }
 
   function formGoal(s) {
-    const g = s.goal, P = PERIODS[g.period], up = g.target >= g.start, u = esc(s.unit);
-    return `
-      <div class="card s-step">
-        <h2><span class="step-num">1</span><span>Где вы сейчас и какая цель?</span></h2>
-        <div class="row2"><label class="field grow">Как назовём<input data-s="title" value="${esc(s.title)}"></label>
-          <label class="field">В чём меряем${unitSelect('unit', s.unit)}</label></div>
-        <div class="fields">
-          <label class="field">сейчас, ${u}<input inputmode="decimal" data-s="goal.start" data-num value="${fmtIn(g.start)}"></label>
-          <label class="field">цель, ${u}<input inputmode="decimal" data-s="goal.target" data-num value="${fmtIn(g.target)}"></label>
-          <label class="field">считаем по${periodSelect('goal.period', g.period)}</label>
-        </div>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">2</span><span>Сколько за ${P.acc} ${up ? 'прибавляете' : 'сбрасываете'}?</span></h2>
-        <p class="sub">Сколько обычно — в нормальный период, без пропусков и срывов. Плохие периоды — в следующем шаге.</p>
+    const g = s.goal, P = PERIODS[g.period], up = g.target >= g.start;
+    return `<div class="card s-form">
+      ${Q(1, 'Где вы сейчас и какая цель?', `<div class="inline">сейчас ${numIn('goal.start', g.start, 'Сейчас')} → цель ${numIn('goal.target', g.target, 'Цель')} ${unitSelect('unit', s.unit)}</div>`)}
+      ${Q(2, `Сколько за ${P.acc} ${up ? 'прибавляете' : 'сбрасываете'}? <small>в обычный период</small>`, `
         ${knowSeg('goal.step', g.step.know, ['exact', 'approx', 'history'])}
-        ${valueEditor(g.step.know, g.step.v, 'goal.step.v', s.unit, { approxHint: 'Чаще всего выходит около «обычно».' })}
-        ${g.hint ? `<p class="hint s-tip">💡 ${esc(g.hint)}</p>` : ''}
-        <div class="s-err" data-err="step"></div>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">3</span><span>Бывают плохие ${P.many}? <small>пропуски, болезнь, срывы</small></span></h2>
+        ${valueEditor(g.step.know, g.step.v, 'goal.step.v', s.unit)}
+        ${tip(g.hint)}<div class="s-err" data-err="step"></div>`)}
+      ${Q(3, `Бывают плохие ${P.many}? <small>пропуски, болезнь, срывы</small>`, `
         <label class="check"><input type="checkbox" data-s="goal.setback.on"${g.setback.on ? ' checked' : ''}> Да, иногда не получается или откатываюсь назад</label>
         ${g.setback.on ? `<div class="maybe"><span>Бывает</span> ${chanceCtl('goal.setback.pct', g.setback.pct)}</div>
-          <div class="sentence">и тогда назад на от <input inputmode="decimal" data-s="goal.setback.from" data-num value="${fmtIn(g.setback.from)}" aria-label="От">
-          до <input inputmode="decimal" data-s="goal.setback.to" data-num value="${fmtIn(g.setback.to)}" aria-label="До"> ${u}
+          <div class="inline">и тогда назад на от ${numIn('goal.setback.from', g.setback.from, 'От')} до ${numIn('goal.setback.to', g.setback.to, 'До')} ${esc(s.unit)}
           <span class="muted">(0 — просто стою на месте)</span></div>` : ''}
-        <div class="s-err" data-err="setback"></div>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">4</span><span>Есть срок? <small>необязательно</small></span></h2>
-        ${deadlineCtl('goal.deadline', g.deadline, g.period, true)}
-      </div>`;
+        <div class="s-err" data-err="setback"></div>`)}
+      ${Q(4, 'Есть срок? <small>необязательно</small>', deadlineCtl('goal.deadline', g.deadline, g.period, true))}
+    </div>${more(`<div class="row2">${titleField(s)}<label class="field">считаем по${periodSelect('goal.period', g.period)}</label></div>`)}`;
   }
 
   function formUntil(s) {
-    const u = s.until, P = PERIODS[u.period], w = u.words;
-    return `
-      <div class="card s-step">
-        <h2><span class="step-num">1</span><span>До какого срока?</span></h2>
-        <div class="row2"><label class="field grow">Как назовём<input data-s="title" value="${esc(s.title)}"></label>
-          <label class="field">считаем по${periodSelect('until.period', u.period)}</label></div>
-        ${deadlineCtl('until.deadline', u.deadline, u.period, false)}
-      </div>
-      ${funnelOn(u) ? `
-      <div class="card s-step">
-        <h2><span class="step-num">2</span><span>Сколько откликов вы отправляете за ${P.acc}?</span></h2>
+    const u = s.until, P = PERIODS[u.period], w = u.words, f = funnelOn(u);
+    let no = 1;
+    const parts = [Q(no++, 'До какого срока?', deadlineCtl('until.deadline', u.deadline, u.period, false))];
+    if (f) {
+      parts.push(Q(no++, `Сколько откликов вы отправляете за ${P.acc}?`, `
         ${knowSeg('until.funnel.apps', u.funnel.apps.know, ['exact', 'approx', 'history'])}
-        ${valueEditor(u.funnel.apps.know, u.funnel.apps.v, 'until.funnel.apps.v', '', { approxHint: 'Сколько вакансий в неделю вы откликаетесь — обычно, меньше всего, больше всего.' })}
+        ${valueEditor(u.funnel.apps.know, u.funnel.apps.v, 'until.funnel.apps.v', '')}
         <div class="s-err" data-err="attempts"></div>
-        <label class="check"><input type="checkbox" data-s="until.funnel.on" checked> Считать от откликов
-          <span class="muted">(снимите, если знаете, сколько у вас собеседований)</span></label>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">3</span><span>Из 10 откликов на сколько зовут на собеседование?</span></h2>
+        <label class="check small-check"><input type="checkbox" data-s="until.funnel.on" checked> Считать от откликов
+          <span class="muted">(снимите, если знаете, сколько у вас собеседований)</span></label>`));
+      parts.push(Q(no++, 'Из 10 откликов на сколько зовут на собеседование?', `
         <div class="maybe"><span>Зовут</span> ${chanceCtl('until.funnel.invite', u.funnel.invite)}</div>
-        <p class="hint s-tip">💡 Не знаете? Посмотрите, сколько откликов вы отправили и сколько было приглашений. Часто 1–3 из 10 (очень примерно).</p>
-      </div>` : `
-      <div class="card s-step">
-        <h2><span class="step-num">2</span><span>Сколько ${w.many} бывает за ${P.acc}?</span></h2>
+        ${tip('Не знаете? Сколько было приглашений на ваши последние отклики. Часто 1–3 из 10 (очень примерно).')}`));
+    } else {
+      parts.push(Q(no++, `Сколько ${w.many} бывает за ${P.acc}?`, `
         ${knowSeg('until.attempts', u.attempts.know, ['exact', 'approx', 'history'])}
-        ${valueEditor(u.attempts.know, u.attempts.v, 'until.attempts.v', '', { approxHint: 'Считаются целыми: бывает 1, 2, 3, 4…' })}
+        ${valueEditor(u.attempts.know, u.attempts.v, 'until.attempts.v', '')}
         <div class="s-err" data-err="attempts"></div>
-        ${u.funnel ? `<label class="check"><input type="checkbox" data-s="until.funnel.on"> Считать от откликов
-          <span class="muted">(если проще сказать, сколько вакансий вы откликаетесь)</span></label>` : ''}
-      </div>`}
-      <div class="card s-step">
-        <h2><span class="step-num">${funnelOn(u) ? 4 : 3}</span><span>Как часто ${w.one} заканчивается ${w.succIns || 'успехом'}?</span></h2>
-        <div class="maybe"><span>Получается</span> ${chanceCtl('until.pct', u.pct)}</div>
-        ${w.hint ? `<p class="hint s-tip">💡 ${esc(w.hint)}</p>` : ''}
-      </div>
-      ${funnelOn(u) ? `
-      <div class="card s-step">
-        <h2><span class="step-num">5</span><span>Из 10 офферов сколько вам подойдут?</span></h2>
-        <div class="maybe"><span>Подходят</span> ${chanceCtl('until.funnel.ok', u.funnel.ok)}</div>
-        <p class="hint s-tip">💡 Оффер — ещё не работа: зарплата или условия могут не устроить. Если согласитесь на любой — 10 из 10.</p>
-      </div>` : ''}
-      <div class="card s-step">
-        <h2><span class="step-num">${funnelOn(u) ? 6 : 4}</span><span>Сколько нужно?</span></h2>
-        <label class="goal">Хотя бы <input inputmode="numeric" data-s="until.need" data-num value="${fmtIn(u.need)}" aria-label="Сколько нужно"> ${esc(plural(u.need, [w.succ, w.succFew, w.succMany]))}</label>
-      </div>`;
+        ${u.funnel ? `<label class="check small-check"><input type="checkbox" data-s="until.funnel.on"> Считать от откликов
+          <span class="muted">(если проще сказать, сколько вакансий вы откликаетесь)</span></label>` : ''}`));
+    }
+    parts.push(Q(no++, `Как часто ${w.one} заканчивается ${w.succIns || 'успехом'}?`, `
+      <div class="maybe"><span>Получается</span> ${chanceCtl('until.pct', u.pct)}</div>${tip(w.hint)}`));
+    if (f) parts.push(Q(no++, 'Из 10 офферов сколько вам подойдут?', `
+      <div class="maybe"><span>Подходят</span> ${chanceCtl('until.funnel.ok', u.funnel.ok)}</div>
+      ${tip('Оффер — ещё не работа: зарплата или условия могут не устроить. Если согласитесь на любой — 10 из 10.')}`));
+    return `<div class="card s-form">${parts.join('')}</div>${more(`<div class="row2">${titleField(s)}
+      <label class="field">считаем по${periodSelect('until.period', u.period)}</label>
+      <label class="field">сколько нужно (${esc(w.succMany)})${numIn('until.need', u.need, 'Сколько нужно')}</label></div>`)}`;
   }
 
   function formTries(s) {
     const t = s.tries;
-    return `
-      <div class="card s-step">
-        <h2><span class="step-num">1</span><span>Сколько попыток?</span></h2>
-        <div class="row2"><label class="field grow">Как назовём<input data-s="title" value="${esc(s.title)}"></label></div>
-        <div class="row2">
-          <label class="field">сколько попыток<input inputmode="numeric" data-s="tries.n" data-num value="${fmtIn(t.n)}"></label>
-          <label class="field grow">попытка — это<input data-s="tries.what" value="${esc(t.what)}" placeholder="собеседование, подход, бросок"></label>
-        </div>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">2</span><span>Как часто одна попытка удаётся?</span></h2>
-        <div class="maybe"><span>Удаётся</span> ${chanceCtl('tries.pct', t.pct)}</div>
-        <p class="hint s-tip">💡 ${esc(t.hint || 'Не знаете? Сколько раз из 10 обычно получается у вас или у похожих людей.')}</p>
-      </div>
-      <div class="card s-step">
-        <h2><span class="step-num">3</span><span>Сколько нужно удачных?</span></h2>
-        <label class="goal">Хотя бы <input inputmode="numeric" data-s="tries.need" data-num value="${fmtIn(t.need)}" aria-label="Сколько нужно"> из ${fmtIn(t.n)}</label>
-      </div>`;
+    return `<div class="card s-form">
+      ${Q(1, 'Сколько попыток?', `<div class="inline">${numIn('tries.n', t.n, 'Сколько попыток')} попыток; попытка — это
+        <input class="wide" data-s="tries.what" value="${esc(t.what)}" placeholder="собеседование, подход, бросок" aria-label="Попытка — это"></div>`)}
+      ${Q(2, 'Как часто одна попытка удаётся?', `<div class="maybe"><span>Удаётся</span> ${chanceCtl('tries.pct', t.pct)}</div>
+        ${tip(t.hint || 'Не знаете? Сколько раз из 10 обычно получается у вас или у похожих людей.')}`)}
+      ${Q(3, 'Сколько нужно удачных?', `<label class="goal">Хотя бы ${numIn('tries.need', t.need, 'Сколько нужно')} из ${fmtIn(t.n)}</label>`)}
+    </div>${more(`<div class="row2">${titleField(s)}</div>`)}`;
   }
 
   function renderStart(msg) {
@@ -1055,7 +1009,7 @@ const PASimple = (() => {
     try {
       sc = toScenario(s);
       if (!last) box.innerHTML = '<section class="card"><p class="sub">Считаю…</p></section>';
-      main = await runP(sc, N, my);
+      main = await runP(sc, nFor(s, N), my);
     } catch (e) {
       if (e.message !== 'cancel' && my === token) box.innerHTML = `<section class="card s-fix"><p class="bad">Не получилось посчитать: ${esc(e.message)}</p></section>`;
       return;
@@ -1070,17 +1024,22 @@ const PASimple = (() => {
         if (t.pct <= 90) ideas.push({ name: 'Подготовиться лучше', what: `попытка удаётся на 1 из 10 чаще (${tenText(t.pct + 10)})`, metric: { kind: 'p', value: binomAtLeast(t.n, Math.min(1, p + 0.1), t.need) } });
       } else {
         for (const idea of ideasFor(s)) {
-          const r = await runP(toScenario(idea.s), N_IDEA, my);
+          const r = await runP(toScenario(idea.s), nFor(idea.s, N_IDEA), my);
           ideas.push({ ...idea, metric: metric(idea.s, r.summary) });
         }
       }
       last.ideas = ideas;
+      // проверка на оптимизм
+      const ps = pessimize(s);
+      if (s.scheme === 'tries') last.pess = { kind: 'p', value: binomAtLeast(ps.tries.n, ps.tries.pct / 100, ps.tries.need) };
+      else if (s.scheme === 'goal' && ps.goal.start !== ps.goal.target && meanStep(ps.goal) <= 0) last.pess = { kind: 'median', value: Infinity };
+      else last.pess = metric(ps, (await runP(toScenario(ps), nFor(ps, N_IDEA), my)).summary);
       if ((s.scheme === 'parts' || s.scheme === 'all') && s.cause.on) last.indep = (await runP(MC.independentVersion(sc), N_IDEA, my)).summary;
       if (calc.variants.length === 2) {
         const o = calc.variants[1 - calc.active];
         if (o.scheme && check(o).ok && !(o.scheme === 'goal' && meanStep(o.goal) <= 0 && o.goal.start !== o.goal.target)
           && !(o.scheme === 'until' && o.until.pct <= 0)) {
-          const r = await runP(toScenario(o), N, my);
+          const r = await runP(toScenario(o), nFor(o, N), my);
           last.other = { s: clone(o), summary: r.summary, label: calc.active ? 'А' : 'Б' };
         }
       }
@@ -1115,8 +1074,44 @@ const PASimple = (() => {
   }
   function metricText(m, s) {
     if (m.kind === 'p') return `${of100(m.value)} из 100`;
-    if (m.kind === 'median') return fmtPeriods(m.value, s.goal.period);
+    if (m.kind === 'median') return m.value > PERIODS[s.goal.period].max ? 'не доходите даже за 10 лет' : fmtPeriods(m.value, s.goal.period);
     return fmtVal(m.value, s.unit);
+  }
+  function pessText(m, s) {
+    if (m.kind === 'p') return `${of100(m.value)} из 100`;
+    if (m.kind === 'median') return m.value > PERIODS[s.goal.period].max ? 'цель не достигается даже за 10 лет' : `скорее всего за ${fmtPeriods(m.value, s.goal.period)}`;
+    return `в плохом случае ${fmtVal(m.value, s.unit)}`;
+  }
+  /** Дата через k периодов от сегодня: «8 декабря», «6 октября 2027 г.». */
+  function periodDate(k, period) {
+    const d = today();
+    d.setDate(d.getDate() + Math.round(k * PERIODS[period].days));
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: d.getFullYear() === today().getFullYear() ? undefined : 'numeric' });
+  }
+  /** Примерная «стоимость» одного прогона (сколько случайных чисел). */
+  function workPerRun(s) {
+    if (s.scheme === 'goal') {
+      const ms = meanStep(s.goal);
+      return Math.min(PERIODS[s.goal.period].max, Math.abs(s.goal.target - s.goal.start) / Math.max(1e-9, ms)) * 3;
+    }
+    if (s.scheme === 'until') {
+      const u = s.until, a = Math.max(0.5, meanOf(untilAttempts(u).know, untilAttempts(u).v)), q = untilP(u);
+      return Math.min(PERIODS[u.period].max, u.need / Math.max(1e-9, a * q)) * (a + 1);
+    }
+    return s.scheme === 'tries' ? s.tries.n : 1;
+  }
+  /** «Если всё на четверть хуже»: длительности и траты ×1,25, темп и шансы ×0,8. */
+  function pessimize(s) {
+    const t = clone(s), worse = v => {
+      ['exact', 'usual', 'min', 'max', 'from', 'to'].forEach(k => { if (Number.isFinite(v[k])) v[k] *= 1.25; });
+      v.pct = Math.min(100, v.pct * 1.25);
+      v.history = v.history.map(x => x * 1.25);
+    };
+    if (t.items) t.items.forEach(it => { worse(it.v); if (it.vc) worse(it.vc); });
+    if (t.goal) { bump(t.goal.step, { mul: 0.8 }); if (t.goal.setback.on) t.goal.setback.pct = Math.min(100, t.goal.setback.pct * 1.25); }
+    if (t.until) { bump(untilAttempts(t.until), { mul: 0.8 }); t.until.pct *= 0.8; if (funnelOn(t.until)) t.until.funnel.invite *= 0.8; }
+    if (t.tries) t.tries.pct *= 0.8;
+    return t;
   }
   function countLE(sorted, x) {
     let lo = 0, hi = sorted.length;
@@ -1158,9 +1153,15 @@ const PASimple = (() => {
       lines.push(Number.isFinite(n90) ? `Чтобы получить хотя бы ${t.need} в 9 случаях из 10, нужно примерно <b>${n90} ${plural(n90, ['попытка', 'попытки', 'попыток'])}</b>; почти наверняка (99 из 100) — ${n99}.`
         : 'С таким шансом одной попытки нужного числа удач почти не набрать.');
     } else if (timeline) {
-      lines.push(`Скорее всего ${isUntil ? esc(s.until.words.act) : 'дойдёте до цели'} за <b>${fmtPeriods(R.pct[50], period)}</b>.`);
-      if (R.pct[90] <= P.max) lines.push(`Чтобы почти наверняка (9 из 10) — нужно <b>${fmtPeriods(Math.ceil(R.pct[90]), period)}</b>.`);
-      if (R.pct[10] < R.pct[50]) lines.push(`Если повезёт (1 из 10) — уже за ${fmtPeriods(Math.max(1, Math.floor(R.pct[10])), period)}.`);
+      // ответ датами: к какому числу — с каким шансом
+      const kAt = q => R.sorted[Math.min(R.sorted.length - 1, Math.max(0, Math.ceil(q * R.sorted.length) - 1))];
+      const verb = isUntil ? esc(s.until.words.act) : 'дойдёте до цели';
+      if (kAt(0.5) === 0) lines.push('Вы уже у цели.');
+      else [[0.5, `Скорее всего ${verb}`], [0.8, 'В 4 случаях из 5'], [0.9, 'Почти наверняка (9 из 10)']].forEach(([q, label]) => {
+        const k = kAt(q);
+        lines.push(k > P.max ? `${label} — дольше ${fmtPeriods(P.max, period)}.`
+          : `${label} за <b>${fmtPeriods(k, period)}</b> — к ${periodDate(k, period)}.`);
+      });
       if (isUntil) {
         const u = s.until, Wp = deadlinePeriods(u.deadline, period), need = triesFor(untilP(u), u.need, 0.9), aw = untilWords(u);
         if (Number.isFinite(need) && Wp >= 1) {
@@ -1182,7 +1183,12 @@ const PASimple = (() => {
         lines.push(`Если всё пойдёт «как обычно», выйдет ${fmtVal(plan, s.unit)} — но так или лучше бывает только в ${of100(countLE(R.sorted, plan) / R.sorted.length)} случаях из 100.`);
       }
     }
-    html += `<section class="card"><h3>${isTries ? 'Чего ждать' : 'Чего ждать и какой нужен запас'}</h3><ul class="plain">${lines.map(l => `<li>${dot2(l)}</li>`).join('')}</ul></section>`;
+    // проверка на оптимизм: люди обычно недооценивают сроки и траты (ошибка планирования)
+    if (last.pess) lines.push(`<span class="opt">Проверка на оптимизм:</span> если всё на четверть хуже, чем вы думаете, — ${pessText(last.pess, s)}.`);
+    else lines.push('<span class="muted">Проверяю на оптимизм…</span>');
+    html += `<section class="card"><h3>${timeline ? 'Когда' : isTries ? 'Чего ждать' : 'Чего ждать и какой нужен запас'}</h3>
+      <ul class="plain">${lines.map(l => `<li>${dot2(l)}</li>`).join('')}</ul>
+      ${timeline ? `<h4 class="s-h4">Шанс к каждой дате</h4><div class="chart" id="s-cum"></div>` : ''}</section>`;
 
     const warn = [];
     if (timeline && notReached > 0.01) warn.push(`В ${of100(notReached)} случаях из 100 это не происходит даже за ${fmtPeriods(P.max, period)}. Похоже, темп слишком медленный.`);
@@ -1238,7 +1244,7 @@ const PASimple = (() => {
       }
     }
 
-    if (!isTries) html += `<section class="card"><h3>${timeline ? `Сколько ${P.forms[2]} уходит` : 'Как часто какой итог'}</h3>
+    if (!isTries && !timeline) html += `<section class="card"><h3>${timeline ? `Сколько ${P.forms[2]} уходит` : 'Как часто какой итог'}</h3>
       ${ev ? `<div class="legend"><span><i class="sw s1"></i>${esc(W.yes)}</span><span><i class="sw s2"></i>${esc(W.no)}</span></div>` : ''}
       <div class="chart" id="s-hist"></div></section>`;
 
@@ -1258,7 +1264,25 @@ const PASimple = (() => {
     $('#s-to-expert').addEventListener('click', () => PA.openExpert(last.sc, { n: 1000000, seed: SEED }));
   }
 
+  /** График «шанс к каждой дате» для целей и «до срока». */
+  function drawCum(el) {
+    const { main, s } = last, sorted = main.summary.result.sorted, n = sorted.length, ev = main.summary.event;
+    const period = s.goal ? s.goal.period : s.until.period, P = PERIODS[period];
+    const kAt = q => sorted[Math.min(n - 1, Math.max(0, Math.ceil(q * n) - 1))];
+    const W = s.goal ? (s.goal.deadline.on ? deadlinePeriods(s.goal.deadline, period) : null) : deadlinePeriods(s.until.deadline, period);
+    const kMax = Math.min(P.max, Math.max(kAt(0.97), W ? W + 2 : 0, 4));
+    const step = Math.max(1, Math.ceil(kMax / 120)), pts = [];
+    for (let k = 0; k <= kMax; k += step) {
+      const d = today(); d.setDate(d.getDate() + Math.round(k * P.days));
+      pts.push({ k, p: countLE(sorted, k) / n, label: `к ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`,
+        short: d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }).replace('.', '') });
+    }
+    Charts.cumulative(el, { title: 'Шанс к каждой дате', points: pts, deadline: W && ev ? { k: W, p: ev.p, label: 'К сроку' } : null });
+  }
+
   function drawHist() {
+    const cum = $('#s-cum');
+    if (cum && last && cum.clientWidth) { drawCum(cum); return; }
     const el = $('#s-hist');
     if (!el || !last || !el.clientWidth) return;
     const { main, s } = last, run = main.run, sorted = main.summary.result.sorted;

@@ -385,8 +385,14 @@ async function until(fn, ms = 20000) {
   // 26. «иду к цели»: жим (вверх), похудение (вниз), здравый смысл
   await goSimple('#simple=bench'); await ready();
   check('Жим: «скорее всего дойдёте за N недель (≈ M мес.)»', /дойдёте до цели за \d+ недел\S* \(≈ [\d,]+ мес\.\)/.test(resText()), (resText().match(/Скорее всего дойдёте[^.]*\./) || [''])[0]);
-  check('Жим: гистограмма по целым неделям (подсказки «30», а не «30,4 … 31,5»)',
-    qa('#s-hist .hit').length > 5 && qa('#s-hist .hit').every(r => /Срок: \d+(–\d+)? недель/.test(r.getAttribute('data-tip'))));
+  check('Жим: ответ датами («— к …») и график «шанс к каждой дате», шанс растёт',
+    /за \d+ недел\S* \(≈ [\d,]+ мес\.\) — к \d+ \S+/.test(resText()) && qa('#s-cum .hit').length > 5 &&
+    qa('#s-cum .hit').every(r => /^к \d+ \S+: \d+ из 100$/.test(r.getAttribute('data-tip'))) &&
+    +qa('#s-cum .hit').pop().getAttribute('data-tip').match(/(\d+) из 100$/)[1] >= +qa('#s-cum .hit')[0].getAttribute('data-tip').match(/(\d+) из 100$/)[1],
+    qa('#s-cum .hit').slice(0, 2).map(r => r.getAttribute('data-tip')).join(' | '));
+  await until(() => /Проверка на оптимизм: если всё на четверть хуже/.test(resText()), 30000);
+  check('Проверка на оптимизм в ответе', /Проверка на оптимизм: если всё на четверть хуже, чем вы думаете, — \d+ из 100/.test(resText()),
+    (resText().match(/Проверка на оптимизм[^.]*\./) || [''])[0]);
   q('[data-s-act="ten"][data-p="goal.setback.pct"][data-n="10"]').click();
   await until(() => q('.s-fix'), 10000);
   check('Откаты 10 из 10: «С такими цифрами цель не приближается»', /цель не приближается/.test(resText()));

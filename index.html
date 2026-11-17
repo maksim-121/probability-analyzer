@@ -291,7 +291,26 @@
   .s-said { font-weight: 600; color: var(--text); }
   .s-say { color: var(--text-2); }
   .s-scheme { flex-wrap: wrap; line-height: 1.4; }
-  .hint.s-tip { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+  .hint.s-tip { margin-top: 4px; }
+  /* компактный блок вопросов */
+  .s-form { padding: 4px 16px; }
+  .s-form .q { padding: 14px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .s-form .q:first-child { border-top: 0; }
+  .q-t { display: flex; gap: 8px; align-items: flex-start; font-weight: 650; font-size: 16px; }
+  .q-t .step-num { flex: none; margin-top: 1px; }
+  .q-t small { font-weight: 400; color: var(--text-2); font-size: 13px; }
+  .q-c { display: flex; flex-direction: column; gap: 6px; }
+  .q-c .hint { margin: 0; }
+  .inline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 15px; }
+  .inline input { width: 5.2em; }
+  .inline input.wide { width: auto; flex: 1; min-width: 12em; }
+  .small-check { font-size: 13px; }
+  .s-more { padding: 10px 16px; }
+  .s-more summary { cursor: pointer; color: var(--text-2); font-size: 14px; }
+  .s-more-body { padding-top: 10px; }
+  .s-h4 { font-size: 14px; margin: 14px 0 4px; color: var(--text-2); font-weight: 600; }
+  .opt { font-weight: 650; }
+  .s-item { padding: 8px 10px; }
   .deadline { display: flex; flex-direction: column; gap: 6px; }
   .deadline .row2 { align-items: center; }
   .deadline input[type="date"] { font-size: 15px; }
@@ -338,6 +357,10 @@
   footer { max-width: 1440px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
   footer a { color: var(--text-2); }
   @media (max-width: 520px) {
+    .toolbar { gap: 6px; }
+    .toolbar .btn { padding: 5px 10px; font-size: 14px; }
+    .modes button { padding: 6px 10px; font-size: 14px; }
+    .s-big { font-size: 52px; }
     .hero-value { font-size: 44px; }
     .name { width: 7.5em; }
     .row { flex-wrap: wrap; }

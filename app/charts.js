@@ -218,5 +218,45 @@ const Charts = (() => {
     return s + `<line class="axis" x1="0" x2="${W}" y1="${H - 0.5}" y2="${H - 0.5}"/></svg>`;
   }
 
-  return { histogram, tornado, convergence, shape, num, pct, compact, esc };
+  // ===================================================================================
+  // «Шанс к каждой дате»: доля прогонов, где всё случилось не позже периода k (растёт от 0 до 100 %)
+  // points: [{ k, p, label }] — label: дата для подписи; deadline: { k, label } | null
+  // ===================================================================================
+  function cumulative(el, o) {
+    const W = Math.max(280, el.clientWidth), H = 220;
+    const m = { l: 44, r: 14, t: 16, b: 34 };
+    const iw = W - m.l - m.r, ih = H - m.t - m.b, pts = o.points;
+    const k0 = pts[0].k, k1 = Math.max(pts[pts.length - 1].k, k0 + 1);
+    const x = k => m.l + ((k - k0) / (k1 - k0)) * iw;
+    const y = p => m.t + ih - p * ih;
+    let s = svgOpen(W, H, o.title);
+    [0, 0.25, 0.5, 0.75, 1].forEach(t => {
+      s += `<line class="grid" x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}"/>` +
+           `<text class="tick" x="${m.l - 6}" y="${y(t) + 4}" text-anchor="end">${Math.round(t * 100)} %</text>`;
+    });
+    // подписи дат: не больше одной на ~90 px
+    const every = Math.max(1, Math.ceil(pts.length / Math.max(2, Math.floor(iw / 90))));
+    pts.forEach((p, i) => {
+      if (i % every) return;
+      s += `<text class="tick" x="${x(p.k)}" y="${H - m.b + 16}" text-anchor="middle">${esc(p.short || p.label)}</text>`;
+    });
+    // ступенчатая линия и заливка под ней
+    let d = `M${x(pts[0].k)},${y(pts[0].p)}`;
+    for (let i = 1; i < pts.length; i++) d += `H${x(pts[i].k)}V${y(pts[i].p)}`;
+    s += `<path class="band" d="${d}V${y(0)}H${x(pts[0].k)}Z"/><path class="line" d="${d}"/>`;
+    if (o.deadline && o.deadline.k >= k0 && o.deadline.k <= k1) {
+      const dx = x(o.deadline.k), dp = o.deadline.p;
+      s += `<line class="ref" x1="${dx}" x2="${dx}" y1="${m.t}" y2="${y(0)}"/>` +
+           `<circle class="dot s1" cx="${dx}" cy="${y(dp)}" r="5"/>` +
+           `<text class="tick strong halo" x="${dx + (dx > W * 0.7 ? -6 : 6)}" y="${y(dp) - 8}" text-anchor="${dx > W * 0.7 ? 'end' : 'start'}">${esc(o.deadline.label)}: ${Math.round(dp * 100)} из 100</text>`;
+    }
+    const slot = iw / Math.max(1, pts.length - 1);
+    pts.forEach(p => {
+      s += `<rect class="hit" x="${x(p.k) - slot / 2}" y="${m.t}" width="${slot}" height="${ih}" data-tip="${esc(`${p.label}: ${Math.round(p.p * 100)} из 100`)}"/>`;
+    });
+    s += `<line class="axis" x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}"/></svg>`;
+    el.innerHTML = s;
+  }
+
+  return { histogram, tornado, convergence, cumulative, shape, num, pct, compact, esc };
 })();

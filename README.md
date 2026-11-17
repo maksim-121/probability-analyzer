@@ -41,6 +41,8 @@
 - **какой нужен запас**: «чтобы успеть в 9 случаях из 10 — закладывайте **1 ч 58 мин**»;
 - «если всё пойдёт как обычно — 1 ч 15 мин, но так бывает только в 7 случаях из 100»;
 - **что поможет больше всего**: «Пробка — такого не случается → 99 из 100»;
+- **ответ датами** для целей и сроков: «скорее всего к 8 декабря, почти наверняка к 12 января» и график «шанс к каждой дате»;
+- **проверка на оптимизм**: «если всё на четверть хуже, чем вы думаете, — 48 из 100» (люди обычно недооценивают сроки и траты);
 - для целей — «скорее всего дойдёте за **46 недель (≈ 10,5 мес.)**»; для работы — «найдёте до 31 декабря в 89 случаях из 100, для 9 из 10 нужно около 15 собеседований — примерно 3 в неделю».
 
 Ещё в простом режиме:
@@ -133,7 +135,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 100 проверок |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь» в обоих режимах: опечатки в формулах, неверная сумма процентов, CSV, ветки, сохранение и открытие файлов, все примеры и шаблоны | 104 проверки |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -152,7 +154,7 @@ python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest   # страница: 100 проверок
+python tests/run_selftest.py uitest   # страница: 104 проверки
 ```
 
 ## Структура
@@ -196,5 +198,5 @@ docs/                 математика, архитектура, скринш
 - A scenario is built from random factors (6 distribution types), formulas, a result and an event. Example: will a meeting start on time given bus delays, lunch overruns and a busy meeting room? 53.94 % ± 0.10 % on 1M runs, exact answer 54 %.
 - Dependent factors: a factor can depend on another one ("rain → bus and lunch delays"), and a dataset can be sampled whole-row so real-world correlations are kept. The app compares the result with a naive model that ignores dependencies. Example: with a common cause the project meets the 40-day deadline in 82.8 % of cases, while the naive model promises 88.4 %.
 - Results: probability with a 95 % CI, exact enumeration when all factors are discrete, percentiles, histogram, tornado sensitivity chart, convergence chart.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 100 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 104 UI checks.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/
