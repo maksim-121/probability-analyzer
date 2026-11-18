@@ -69,11 +69,22 @@ async function until(fn, ms = 20000) {
     (resText().match(/Проверка на оптимизм[^.]*\./) || [''])[0]);
   check('Расчёты понятны словами: «если … = да», «самое большое из», «не меньше 0»',
     qa('[data-s="steps.1.op"]')[0].value === 'if' && qa('[data-s="steps.2.op"]')[0].value === 'max' && q('[data-s="steps.0.clamp"]').checked);
-  // отчёт в PDF: кнопка строит отчёт и открывает печать (в тесте печать подменена)
-  let printed = 0; w2.print = () => { printed++; };
+  // отчёт: «⬇ Скачать отчёт PDF» сразу скачивает файл; 🖨 — печать (в тесте подменены)
+  const downloads = []; w2.HTMLAnchorElement.prototype.click = function () { downloads.push({ name: this.download, href: this.href }); };
   q('[data-s-act="pdf"]').click();
+  await until(() => downloads.length, 30000);
+  const pdfBytes = downloads.length ? new Uint8Array(await (await w2.fetch(downloads[0].href)).arrayBuffer()) : new Uint8Array();
+  const pdfHead = String.fromCharCode(...pdfBytes.slice(0, 5)), pdfText = new TextDecoder('latin1').decode(pdfBytes);
+  const pdfPages = (pdfText.match(/\/Type \/Page[^s]/g) || []).length;
+  check('«⬇ Скачать отчёт PDF»: скачан файл «Отчёт — Начнётся ли совещание вовремя.pdf», настоящий PDF, 2 страницы',
+    downloads.length === 1 && downloads[0].name === 'Отчёт — Начнётся ли совещание вовремя.pdf' && pdfHead === '%PDF-' &&
+    pdfBytes.length > 30000 && pdfPages === 2, `${downloads.length && downloads[0].name}, ${pdfHead}, ${pdfBytes.length} байт, страниц ${pdfPages}`);
+  check('После скачивания кнопка снова «⬇ Скачать отчёт PDF», отчёт снова скрыт',
+    /Скачать отчёт PDF/.test(q('[data-s-act="pdf"]').textContent) && !q('[data-s-act="pdf"]').disabled && !q('#s-report').classList.contains('rendering'));
+  let printed = 0; w2.print = () => { printed++; };
+  q('[data-s-act="print"]').click();
   const rep = q('#s-report');
-  check('«📄 Отчёт в PDF»: печать вызвана, в отчёте ответ, что задано, расчёты словами, график, «как посчитано»', printed === 1 &&
+  check('«🖨»: печать вызвана, в отчёте ответ, что задано, расчёты словами, график, «как посчитано»', printed === 1 &&
     /54 из 100/.test(rep.textContent) && /Что задано/.test(rep.textContent) && /Опоздание транспорта/.test(rep.textContent) &&
     /Задержка совещания = самое большое из: «Опоздание транспорта», «Опоздание после обеда», «Ожидание переговорки»/.test(rep.textContent) &&
     /если «Переговорка занята» — да, то «Затяжка прошлой встречи», иначе 0/.test(rep.textContent) &&

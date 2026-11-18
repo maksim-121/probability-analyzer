@@ -980,7 +980,8 @@ const PASimple = (() => {
       return;
     }
     if (a === 'to-start') { newCalc(); return; }
-    if (a === 'pdf') { printReport(); return; }
+    if (a === 'pdf') { downloadReport(); return; }
+    if (a === 'print') { printReport(); return; }
     if (a === 'csv') { csvTarget = b.dataset.p; $('#s-csv-file').click(); return; }
     if (a === 'csv-col') { const cs = csvState[b.dataset.p]; if (cs && cs.cols) useCsvCol(b.dataset.p, cs.file, cs.cols[+b.dataset.j]); return; }
     if (a === 'example-s') {
@@ -1375,7 +1376,8 @@ const PASimple = (() => {
     let html = '';
 
     // ---- 1. главный ответ
-    const pdfBtn = '<button class="btn small s-pdf" data-s-act="pdf" title="Отчёт: что задано, ответ, графики — для печати или сохранения в PDF">📄 Отчёт в PDF</button>';
+    const pdfBtn = `<span class="s-pdf"><button class="btn small" data-s-act="pdf" title="Скачать отчёт: что задано, ответ, график, советы — файлом PDF">⬇ Скачать отчёт PDF</button>
+      <button class="btn small icon-btn" data-s-act="print" title="Напечатать отчёт" aria-label="Напечатать отчёт">🖨</button></span>`;
     if (ev) {
       const [lvl, word, icon] = verdict(ev.p);
       view.big = `${of100(ev.p)} из 100`;
@@ -1569,6 +1571,61 @@ const PASimple = (() => {
           распределениям, и считается, как часто выполняется условие. Генератор с сидом: тот же расчёт всегда даёт те же числа.</p>
         <ul>${view.details.map(d => `<li>${d}</li>`).join('')}</ul></section>
       <footer class="r-foot">Анализатор вероятностей — https://maksim-121.github.io/probability-analyzer/</footer>`;
+  }
+  /** Отчёт файлом PDF: каждый блок отчёта рисуется картинкой (html2canvas) и раскладывается по страницам A4 (jsPDF). */
+  async function downloadReport() {
+    if (!last) return;
+    if (!window.jspdf || !window.html2canvas) { printReport(); return; }   // библиотек нет — хотя бы печать
+    const btn = $('[data-s-act="pdf"]'), label = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Готовлю PDF…'; }
+    buildReport();
+    const box = $('#s-report');
+    box.classList.add('rendering');
+    try {
+      inlineSvgStyles(box);
+      const pdf = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+      const M = 14, W = 210 - 2 * M, TOP = 14, BOTTOM = 297 - 14, PAGE = BOTTOM - TOP;
+      let y = TOP;
+      for (const el of [...box.children]) {
+        const c = await window.html2canvas(el, { scale: 2, backgroundColor: '#ffffff', logging: false });
+        if (!c.width || !c.height) continue;
+        const px = c.width / W;                       // точек картинки на миллиметр
+        // блок целиком не помещается, но поместится на новой странице — переносим, чтобы не резать
+        if (c.height / px > BOTTOM - y && c.height / px <= PAGE && y > TOP) { pdf.addPage(); y = TOP; }
+        for (let off = 0; off < c.height;) {
+          const h = Math.min(c.height - off, Math.floor((BOTTOM - y) * px));
+          const part = document.createElement('canvas');
+          part.width = c.width; part.height = h;
+          part.getContext('2d').drawImage(c, 0, off, c.width, h, 0, 0, c.width, h);
+          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', M, y, W, h / px);
+          off += h; y += h / px;
+          if (off < c.height) { pdf.addPage(); y = TOP; }
+        }
+        y += 3;
+      }
+      const n = pdf.getNumberOfPages();
+      for (let i = 1; i <= n; i++) { pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(140); pdf.text(`${i} / ${n}`, 210 - M, 297 - 7, { align: 'right' }); }
+      const name = `Отчёт — ${(last.view ? last.view.title : 'расчёт').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80)}.pdf`;
+      saveBlob(pdf.output('blob'), name);
+    } finally {
+      box.classList.remove('rendering');
+      if (btn) { btn.disabled = false; btn.textContent = label; }
+    }
+  }
+  /** Графики берут цвета из стилей страницы; для картинки переносим их прямо в элементы. */
+  function inlineSvgStyles(root) {
+    $$('svg', root).forEach(svg => [svg, ...svg.querySelectorAll('*')].forEach(el => {
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none') { el.setAttribute('display', 'none'); return; }
+      ['fill', 'stroke', 'stroke-width', 'stroke-dasharray', 'opacity', 'font-size', 'font-family', 'font-weight']
+        .forEach(p => { const v = cs.getPropertyValue(p); if (v) el.style.setProperty(p, v); });
+    }));
+  }
+  function saveBlob(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name; a.hidden = true;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 2000);
   }
   function printReport() {
     if (!last) return;

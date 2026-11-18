@@ -50,8 +50,8 @@
 - **что поможет больше всего**: «Если «Переговорка занята» всегда «нет» — 54 → 72 из 100»;
 - **проверка на оптимизм**: «если всё на четверть хуже, чем вы вписали, — 33 из 100 вместо 54» (люди обычно оценивают слишком оптимистично);
 - **ответ датами** для целей и сроков: «скорее всего к 8 декабря, почти наверняка к 12 января» и график «шанс к каждой дате»;
-- **📄 Отчёт в PDF** — две страницы A4: ответ, всё, что задано (факторы и расчёты словами), график, советы и метод расчёта.
-  Кнопка открывает печать, там выбрать «Сохранить как PDF».
+- **⬇ Скачать отчёт PDF** — сразу скачивается файл на 2 страницы A4: ответ, всё, что задано (факторы и расчёты словами),
+  график, советы и метод расчёта. [Пример отчёта](docs/пример_отчёта.pdf). Рядом кнопка 🖨 — напечатать.
 
 Ещё в простом режиме:
 - **«Сравнить с другим вариантом»** — варианты А и Б рядом (такси или автобус, 2 или 3 тренировки);
@@ -122,7 +122,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, загрузка CSV, отчёт в PDF, старые сохранения, сравнение вариантов, ссылка, особые расчёты | 52 проверки |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, загрузка CSV, отчёт в PDF, старые сохранения, сравнение вариантов, ссылка, особые расчёты | 54 проверки |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -141,7 +141,7 @@ python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest   # страница: 52 проверки
+python tests/run_selftest.py uitest   # страница: 54 проверки
 ```
 
 ## Структура
@@ -151,6 +151,7 @@ index.html            страница
 app/                  интерфейс: simple.js (конструктор и ответ), charts.js (графики SVG), csv.js (CSV из Excel, имена для формул)
 engine/engine.js      движок: генератор, распределения, язык формул, прогон, статистика, перебор, связи
 engine/templates.js   учебные данные для примера «по статистике»
+vendor/               jsPDF и html2canvas — только для скачивания отчёта в PDF
 reference/            Python-эталон движка и его тесты
 tests/                самопроверка движка и страницы в браузере
 данные/               учебный CSV со «статистикой» 60 дней
@@ -164,7 +165,7 @@ docs/                 математика, архитектура, скринш
 
 | Часть | Технологии |
 |---|---|
-| Приложение | HTML, CSS, JavaScript без библиотек и сборки; графики — SVG |
+| Приложение | HTML, CSS, JavaScript без сборки; графики — SVG; расчёт без библиотек. Для файла PDF — jsPDF 2.5.1 и html2canvas 1.4.1 (MIT, лежат в `vendor/`, интернет не нужен) |
 | Генератор | xoshiro128** с начальным состоянием из splitmix32, 53-битные равномерные числа |
 | Эталон и тесты | Python 3 (только стандартная библиотека), unittest, Chrome в режиме без окна |
 | Прототип, учебные данные | Python, NumPy |
@@ -185,5 +186,5 @@ docs/                 математика, архитектура, скринш
 - Example from the task: will a meeting start on time given transport delays, lunch overruns and a busy meeting room? 54 out of 100, exact answer 0.8 · 0.9 · 0.75 = 54 %.
 - Common cause: factors can depend on a yes/no factor ("rain → transport and lunch delays"); the app compares the result with a naive model that ignores the link.
 - Results: plain-language answer, probability with a 95 % CI, exact enumeration when all factors are discrete, histogram, what helps most.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 52 UI checks. How the project was built with the AI assistant Claude is described in the [process](https://github.com/maksim-121/probability-analyzer/tree/process) branch.
-- Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 54 UI checks. How the project was built with the AI assistant Claude is described in the [process](https://github.com/maksim-121/probability-analyzer/tree/process) branch.
+- Plain HTML/CSS/JS, no build step, works offline; the only libraries are jsPDF and html2canvas (bundled in `vendor/`) for the PDF report. **Demo:** https://maksim-121.github.io/probability-analyzer/

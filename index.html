@@ -288,7 +288,8 @@
   /* ответ: шапка с кнопкой отчёта, пояснение «как посчитано» */
   .s-ans-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
   .s-ans-head .s-q { margin-top: 0; }
-  .s-pdf { margin-left: auto; }
+  .s-pdf { margin-left: auto; display: inline-flex; gap: 6px; }
+  .s-pdf .icon-btn { padding-left: 8px; padding-right: 8px; }
   .s-how { color: var(--text-2); font-size: 13px; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
   .idea-num b { font-weight: 750; }
 
@@ -308,6 +309,13 @@
     body > *:not(#s-report) { display: none !important; }
     .s-report { display: block; color: #0b0b0b; }
   }
+  /* отчёт рисуется для PDF за пределами экрана, всегда в светлых цветах */
+  .s-report.rendering { display: block; position: fixed; left: -10000px; top: 0; width: 720px; background: #fff; color: #0b0b0b;
+    font-size: 13px; color-scheme: light;
+    --page: #fff; --surface: #fff; --card: #fff; --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+    --line: #e1e0d9; --axis: #c3c2b7; --s1: #2a78d6; --s2: #eb6834; --band: rgba(42, 120, 214, 0.10); --range: #c3c2b7;
+    --good: #006300; --bad: #b3261e; }
+  .s-report.rendering > * { background: #fff; padding: 1px 0; }
   .s-report h1 { font-size: 22px; margin: 2px 0; }
   .s-report h2 { font-size: 15px; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 1.5px solid #2a78d6; }
   .s-report h3 { font-size: 13px; margin: 10px 0 4px; }
@@ -402,6 +410,8 @@
 <script src="engine/templates.js"></script>
 <script src="app/csv.js"></script>
 <script src="app/charts.js"></script>
+<script src="vendor/html2canvas.min.js"></script>
+<script src="vendor/jspdf.umd.min.js"></script>
 <script src="app/simple.js"></script>
 <script>PASimple.init();</script>
 </body>
