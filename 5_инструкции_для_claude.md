@@ -27,6 +27,7 @@
 - `app/simple.js` — интерфейс-конструктор: факторы → блоки расчёта → условие успеха; ответ словами; отчёт для PDF.
 - `app/csv.js` — чтение CSV из русского Excel для фактора «по данным».
 - `app/charts.js` — графики (SVG, без библиотек).
+- `vendor/` — jsPDF и html2canvas, только для скачивания отчёта в PDF.
 - `reference/` — Python-эталон движка, совпадающий с JavaScript до последнего знака.
 - `tests/` — самопроверка движка и проверка страницы «как пользователь» в Chrome без окна.
 
@@ -44,7 +45,7 @@
 cd reference; python -m unittest tests_ref      # Python-эталон: 54 теста
 python reference/make_vectors.py                # эталонные ответы для сверки
 python tests/run_selftest.py                    # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest             # страница «как пользователь»: 52 проверки
+python tests/run_selftest.py uitest             # страница «как пользователь»: 54 проверки
 ```
 
 ### Примеры для быстрой проверки
