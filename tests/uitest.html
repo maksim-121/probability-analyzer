@@ -17,7 +17,7 @@ async function until(fn, ms = 20000) {
 (async () => {
   const f = document.getElementById('f');
   await new Promise(r => f.addEventListener('load', r, { once: true }));
-  // ================================================================ простой режим (для обычного человека)
+  // ================================================================ приложение глазами пользователя
   let w2 = null, d2 = null;
   const goSimple = async hash => {
     f.src = `../index.html?r${Math.random().toString(36).slice(2)}${hash}`;
@@ -45,7 +45,7 @@ async function until(fn, ms = 20000) {
     /Конструктор вероятностей/.test(q('#s-editor').textContent) && !q('#s-q'));
   await goSimple('');
   await ready();
-  check('Режима специалиста нет: ни переключателя, ни кнопки «Открыть в режиме специалиста»',
+  check('Одна страница: нет ни переключателя режимов, ни старого редактора',
     !q('#expert-view') && !q('[data-mode-btn]') && !q('#s-to-expert') && !/Для специалиста/.test(d2.body.textContent));
   // P = P(транспорт ≤ 5) · P(обед ≤ 10) · P(переговорка свободна) = 0,8 · 0,9 · 0,75 = 0,54
   check('Первый заход: пример из задания, 4 фактора, 3 расчёта, 54 из 100 (точно 0,8·0,9·0,75)',
@@ -178,7 +178,7 @@ async function until(fn, ms = 20000) {
     q('#s-my-list').textContent.replace(/\s+/g, ' ').slice(0, 100));
 
   // 24. ссылка: открываем — те же два варианта
-  const link = w2.eval('PASimple').shareLink();
+  const link = w2.eval('App').shareLink();
   check('«Поделиться»: в ссылке зашит расчёт', /#s=[A-Za-z0-9_-]{20,}$/.test(link));
   await goSimple(link.slice(link.indexOf('#')));
   await until(() => big(), 40000);
@@ -212,7 +212,7 @@ async function until(fn, ms = 20000) {
     /Автобус_мин \(60\)/.test(cols[0]) && /Обед_затянулся_мин/.test(cols[1]) && /Переговорка/.test(cols[2]), cols.join(' | '));
   qa('[data-s-act="csv-col"]')[1].click();
   await until(() => /^\d+ из 100/.test(big()), 30000);
-  check('CSV: взят столбец «Обед», 60 значений, сообщение и ответ', w2.eval('PASimple').calc.variants[0].factors[0].v.history.length === 60 &&
+  check('CSV: взят столбец «Обед», 60 значений, сообщение и ответ', w2.eval('App').calc.variants[0].factors[0].v.history.length === 60 &&
     /Загружено 60 значений из «статистика_совещаний\.csv», столбец «Обед_затянулся_мин»/.test(q('#s-editor').textContent) &&
     /60 знач\./.test(q('[data-hist="factors.0.v"]').textContent), (q('.csv-msg') || {}).textContent);
   giveFile('x', 'отчёт.xlsx');
@@ -220,7 +220,7 @@ async function until(fn, ms = 20000) {
   check('Файл .xlsx: «Сохраните его в Excel как CSV»', /Сохраните его в Excel как «CSV/.test(q('#s-editor').textContent));
 
   // 24в. старые сохранённые расчёты «из частей» открываются в конструкторе
-  w2.eval('PASimple').load({ v: 3, scheme: 'parts', title: 'Старый расчёт', unit: 'мин', limit: { on: true, value: 35 },
+  w2.eval('App').load({ v: 3, scheme: 'parts', title: 'Старый расчёт', unit: 'мин', limit: { on: true, value: 35 },
     cause: { on: false, name: 'Дождь', pct: 30 }, items: [
       { name: 'Сборы', know: 'exact', v: { exact: 30 }, byCause: false, vc: null },
       { name: 'Пробка', know: 'maybe', v: { pct: 50, from: 10, to: 10, history: [] }, byCause: false, vc: null }] });
@@ -254,7 +254,7 @@ async function until(fn, ms = 20000) {
 
   // 27. попытки: точный биномиальный ответ 1 − 0,85^8 = 72,75 %
   await goSimple('#simple=offer'); await ready();
-  const exactP = w2.eval('PASimple').binomAtLeast(8, 0.15, 1);
+  const exactP = w2.eval('App').binomAtLeast(8, 0.15, 1);
   check('Собеседования: 73 из 100 (точно 1 − 0,85⁸ = 72,75 %)', Math.abs(exactP - 0.7275) < 1e-4 && /^73 из 100/.test(big()), big());
   check('Собеседования: «нужно примерно 15 попыток» для 9 из 10', /нужно примерно 15 попыток/.test(resText()));
   check('Шанс 15 %: подпись «1,5 из 10»', /1,5 из 10/.test(q('.ten-txt').textContent), q('.ten-txt').textContent);

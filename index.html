@@ -153,7 +153,7 @@
   /* --- режимы и панели */
   .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; max-width: 1440px; margin: 0 auto; padding: 4px 16px; }
 
-  /* --- простой режим: вопросы */
+  /* --- форма: вопросы */
   .s-step h2 { font-size: 17px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 10px; }
   .s-step h2 .step-num { flex: none; margin-top: 1px; }
   .row2 { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -178,7 +178,7 @@
   .goal { font-size: 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .goal input:not([type="checkbox"]) { width: 6em; font-size: 16px; }
 
-  /* --- простой режим: ответ */
+  /* --- ответ */
   .s-q { color: var(--text-2); font-size: 15px; margin-top: 10px; }
   .s-big { font-size: 64px; font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
   .s-big span { font-size: 24px; font-weight: 600; color: var(--text-2); }
@@ -204,7 +204,7 @@
   .s-details code { font-family: ui-monospace, Consolas, monospace; font-size: 13px; background: var(--surface);
                     border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
   .s-fix h3 { color: var(--bad); }
-  /* --- простой режим v2: выбор ситуации, «что вы знаете», варианты */
+  /* --- стартовый экран, «как бывает», варианты */
   .schemes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
   .scheme { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; text-align: left; border: 1px solid var(--line);
             background: var(--surface); border-radius: 12px; padding: 14px; color: var(--text); }
@@ -412,7 +412,7 @@
 <script src="app/charts.js"></script>
 <script src="vendor/html2canvas.min.js"></script>
 <script src="vendor/jspdf.umd.min.js"></script>
-<script src="app/simple.js"></script>
-<script>PASimple.init();</script>
+<script src="app/app.js"></script>
+<script>App.init();</script>
 </body>
 </html>

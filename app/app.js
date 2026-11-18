@@ -14,7 +14,7 @@
  *
  * Расчёт («Мои расчёты») = один или два варианта (сравнение «а что если»); сохраняется сам, отправляется ссылкой.
  */
-const PASimple = (() => {
+const App = (() => {
   'use strict';
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -317,7 +317,7 @@ const PASimple = (() => {
       const parts = [{ p: g.setback.on ? 100 - g.setback.pct : 100, dist: signed(distOf(g.step.know, g.step.v)) }];
       if (g.setback.on && g.setback.pct > 0) parts.push({ p: g.setback.pct, dist: signed({ type: 'uniform', min: -g.setback.to, max: -g.setback.from }) });
       const W = g.deadline.on ? deadlinePeriods(g.deadline, g.period) : null;
-      return { name: s.title || 'Моя цель', description: 'Собрано в простом режиме: когда дойду до цели.',
+      return { name: s.title || 'Моя цель', description: 'Особый расчёт: когда дойду до цели.',
         factors: [{ name: 'Периоды', label: `Сколько ${P.forms[2]} до цели`, dist: { type: 'walk', start: g.start, goal: g.target,
           maxSteps: P.max, step: { type: 'mixture', parts } } }],
         derived: [], result: { name: 'Итог', label: `Сколько ${P.forms[2]} до цели`, unit: P.forms[2], formula: 'Периоды' },
@@ -325,7 +325,7 @@ const PASimple = (() => {
     }
     if (s.scheme === 'until') {
       const u = s.until, P = PERIODS[u.period], W = deadlinePeriods(u.deadline, u.period);
-      return { name: s.title || 'До срока', description: 'Собрано в простом режиме: получится ли до срока.',
+      return { name: s.title || 'До срока', description: 'Особый расчёт: получится ли до срока.',
         factors: [{ name: 'Периоды', label: `Сколько ${P.forms[2]} уйдёт`,
           dist: { type: 'walk', start: 0, goal: u.need, maxSteps: P.max, step: { type: 'repeat',
             timesDist: distOf(untilAttempts(u).know, untilAttempts(u).v), dist: { type: 'yesno', p: untilP(u) } } } }],
@@ -334,7 +334,7 @@ const PASimple = (() => {
     }
     if (s.scheme === 'tries') {
       const t = s.tries;
-      return { name: s.title || 'Попытки', description: 'Собрано в простом режиме: несколько попыток.',
+      return { name: s.title || 'Попытки', description: 'Особый расчёт: несколько попыток.',
         factors: [{ name: 'Удачные', label: `Сколько удачных из ${t.n}`, dist: { type: 'repeat', times: t.n, dist: { type: 'yesno', p: t.pct / 100 } } }],
         derived: [], result: { name: 'Итог', label: 'Сколько удачных', unit: 'шт.', formula: 'Удачные' },
         event: { name: 'Успех', label: `Хотя бы ${t.need} удачных`, formula: `Итог >= ${t.need}` } };

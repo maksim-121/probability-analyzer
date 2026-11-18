@@ -17,7 +17,7 @@
 Для обычного человека, которому нужно решить: **успею ли? хватит ли? уложусь ли? сколько закладывать?**
 Готовых событий нет — человек описывает свою ситуацию сам, а приложение подсказывает, как.
 
-**Простой режим** (открывается по умолчанию) — это **универсальный конструктор**, как в задании: приложение ничего не угадывает,
+Приложение — это **универсальный конструктор вероятностей**, как в задании: оно ничего не угадывает,
 человек сам собирает свою ситуацию из блоков, поэтому новое условие не «ломает» программу.
 
 1. **Что прогнозируем?** — название своими словами.
@@ -53,7 +53,7 @@
 - **⬇ Скачать отчёт PDF** — сразу скачивается файл на 2 страницы A4: ответ, всё, что задано (факторы и расчёты словами),
   график, советы и метод расчёта. [Пример отчёта](docs/пример_отчёта.pdf). Рядом кнопка 🖨 — напечатать.
 
-Ещё в простом режиме:
+Ещё:
 - **«Сравнить с другим вариантом»** — варианты А и Б рядом (такси или автобус, 2 или 3 тренировки);
 - **«Мои расчёты»** — всё сохраняется в браузере само, можно вернуться и обновить цифры;
 - **«Поделиться»** — расчёт зашивается в ссылку;
@@ -148,7 +148,7 @@ python tests/run_selftest.py uitest   # страница: 54 проверки
 
 ```
 index.html            страница
-app/                  интерфейс: simple.js (конструктор и ответ), charts.js (графики SVG), csv.js (CSV из Excel, имена для формул)
+app/                  интерфейс: app.js (конструктор и ответ), charts.js (графики SVG), csv.js (CSV из Excel, имена для формул)
 engine/engine.js      движок: генератор, распределения, язык формул, прогон, статистика, перебор, связи
 engine/templates.js   учебные данные для примера «по статистике»
 vendor/               jsPDF и html2canvas — только для скачивания отчёта в PDF
@@ -182,7 +182,7 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
-- **Simple mode** is a universal constructor (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check, and a printable PDF report. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link.
+- The app is a **universal probability constructor** (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check, and a printable PDF report. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link.
 - Example from the task: will a meeting start on time given transport delays, lunch overruns and a busy meeting room? 54 out of 100, exact answer 0.8 · 0.9 · 0.75 = 54 %.
 - Common cause: factors can depend on a yes/no factor ("rain → transport and lunch delays"); the app compares the result with a naive model that ignores the link.
 - Results: plain-language answer, probability with a 95 % CI, exact enumeration when all factors are discrete, histogram, what helps most.
