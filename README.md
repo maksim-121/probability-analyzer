@@ -8,6 +8,8 @@
 
 *English summary is at the end of this page.*
 
+**Как проект делался вместе с ИИ-ассистентом Claude** (инструкция, хронология, запросы и промпты, переписка) — в отдельной ветке [`process`](https://github.com/maksim-121/probability-analyzer/tree/process).
+
 ![Конструктор: начнётся ли совещание вовремя](docs/screenshots/simple.jpg)
 
 ## Для кого и зачем
@@ -40,14 +42,16 @@
 Ещё примеры: совещание с дождём, совещание по статистике 60 дней, поездка, самолёт, два кубика (проверка точным ответом).
 Для ситуаций «во времени» остались **особые расчёты**: «Когда дойду до цели?», «Получится ли до срока?», «Получится ли с нескольких попыток?».
 
-Ответ — человеческими словами и единицами, пересчитывается сам:
-- «**92 из 100** — почти наверняка успеете»;
-- **какой нужен запас**: «чтобы успеть в 9 случаях из 10 — закладывайте **1 ч 58 мин**»;
-- «если всё пойдёт как обычно — 1 ч 15 мин, но так бывает только в 7 случаях из 100»;
-- **что поможет больше всего**: «Пробка — такого не случается → 99 из 100»;
+Ответ справа — человеческими словами, пересчитывается сам:
+- «**54 из 100** — в 54 случаях из 100 «Задержка совещания» не больше 5 мин, то есть **примерно каждый второй раз**»
+  и пояснение, как это посчитано;
+- **сколько выходит**: «обычно — около 5 мин; в 8 случаях из 10 — от 0 до 13 мин; чтобы условие выполнялось 9 раз из 10,
+  порог пришлось бы поднять до 13 мин» и гистограмма с подписью, что значат цвета;
+- **что поможет больше всего**: «Если «Переговорка занята» всегда «нет» — 54 → 72 из 100»;
+- **проверка на оптимизм**: «если всё на четверть хуже, чем вы вписали, — 33 из 100 вместо 54» (люди обычно недооценивают сроки и траты);
 - **ответ датами** для целей и сроков: «скорее всего к 8 декабря, почти наверняка к 12 января» и график «шанс к каждой дате»;
-- **проверка на оптимизм**: «если всё на четверть хуже, чем вы думаете, — 48 из 100» (люди обычно недооценивают сроки и траты);
-- для целей — «скорее всего дойдёте за **46 недель (≈ 10,5 мес.)**»; для работы — «найдёте до 31 декабря в 89 случаях из 100, для 9 из 10 нужно около 15 собеседований — примерно 3 в неделю».
+- **📄 Отчёт в PDF** — две страницы A4: ответ, всё, что задано (факторы и расчёты словами), график, советы и метод расчёта.
+  Кнопка открывает печать, там выбрать «Сохранить как PDF».
 
 Ещё в простом режиме:
 - **«Сравнить с другим вариантом»** — варианты А и Б рядом (такси или автобус, 2 или 3 тренировки);
@@ -117,7 +121,7 @@
 |---|---|---|
 | Python-эталон ([reference/](reference/)) | Монте-Карло против точных формул: средние всех распределений, кубики, совещание, зависимости, покрытие 95 % интервала | 54 теста |
 | JavaScript против Python ([tests/selftest.html](tests/selftest.html)) | Один генератор в двух реализациях: при одном сиде совпадают все числа до последнего знака | 58 проверок |
-| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, сравнение вариантов, ссылка, особые расчёты | 41 проверка |
+| Страница ([tests/uitest.html](tests/uitest.html)) | Сценарии «как пользователь»: пример из задания, расчёт с нуля, своя формула и опечатки в ней, неверная сумма процентов, сравнение вариантов, ссылка, особые расчёты | 44 проверки |
 
 Так же проверялся Snow Boom: две независимые реализации обязаны давать одинаковые числа, а там, где ответ известен точно, Монте-Карло обязан попадать в свою погрешность.
 
@@ -136,7 +140,7 @@ python -m unittest tests_ref          # эталон: 54 теста
 python make_vectors.py                # ответы эталона для сверки
 cd ..
 python tests/run_selftest.py          # движок в браузере: 58 проверок
-python tests/run_selftest.py uitest   # страница: 41 проверка
+python tests/run_selftest.py uitest   # страница: 44 проверки
 ```
 
 ## Структура
@@ -176,9 +180,9 @@ docs/                 математика, архитектура, скринш
 
 **Probability Analyzer** is a browser app that estimates probabilities of real-life events with Monte Carlo simulation. It reuses the engine of my slot game [Snow Boom](https://github.com/maksim-121/snow-boom): a seeded RNG, weighted sampling, mass simulation, statistics with confidence intervals and checks against exact answers.
 
-- **Simple mode** is a universal constructor (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link.
+- **Simple mode** is a universal constructor (no topic guessing): add random factors (exact / roughly / any value in a range / may happen / yes-no / options with percentages / past data), optionally tie them to a common cause, combine them into a result with blocks (sum, max, min, difference, product, if-then-else or a custom formula) and set a success condition. The answer is plain: "54 times out of 100", what helps most, an optimism check, and a printable PDF report. Special time-based calculations (goal step by step, until a deadline, several attempts) remain. Variants A/B side by side, saved calculations, share by link.
 - Example from the task: will a meeting start on time given transport delays, lunch overruns and a busy meeting room? 54 out of 100, exact answer 0.8 · 0.9 · 0.75 = 54 %.
 - Common cause: factors can depend on a yes/no factor ("rain → transport and lunch delays"); the app compares the result with a naive model that ignores the link.
 - Results: plain-language answer, probability with a 95 % CI, exact enumeration when all factors are discrete, histogram, what helps most.
-- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 41 UI checks.
+- Verification: a pure-Python reference engine is bit-exact with the JavaScript engine (same RNG). 54 Python tests, 58 engine checks and 44 UI checks. How the project was built with the AI assistant Claude is described in the [process](https://github.com/maksim-121/probability-analyzer/tree/process) branch.
 - Plain HTML/CSS/JS, no libraries, works offline. **Demo:** https://maksim-121.github.io/probability-analyzer/
