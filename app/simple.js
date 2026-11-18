@@ -1201,6 +1201,7 @@ const PASimple = (() => {
       return;
     }
     if (a === 'to-start') { newCalc(); return; }
+    if (a === 'pdf') { printReport(); return; }
     if (a === 'blank-b') { calc.variants[calc.active] = blankB(); open.clear(); open.add(`${calc.active}.f0`); last = null; }
     else if (a === 'b-add-f') {
       const lastF = s.factors[s.factors.length - 1];
@@ -1355,16 +1356,16 @@ const PASimple = (() => {
         const one = (what, apply) => {
           const t = clone(s), x = t.factors[k];
           apply(x.v); if (x.depOn && x.vc) apply(x.vc);
-          out.push({ name: nm, what, s: t });
+          out.push({ name: nm, what, s: t, phr: true });
         };
-        if (f.know === 'approx') one(`всегда как обычно — ${fmtVal(v.usual, u)}`, x => { x.min = x.max = x.usual; });
-        else if (f.know === 'range') { const mid = (v.min + v.max) / 2; one(`всегда посередине — ${fmtVal(mid, u)}`, x => { x.min = x.max = (x.min + x.max) / 2; }); }
-        else if (f.know === 'maybe') one('такого не случается', x => { x.pct = 0; });
+        if (f.know === 'approx') one(`всегда как обычно (${fmtVal(v.usual, u)})`, x => { x.min = x.max = x.usual; });
+        else if (f.know === 'range') { const mid = (v.min + v.max) / 2; one(`всегда ровно посередине (${fmtVal(mid, u)})`, x => { x.min = x.max = (x.min + x.max) / 2; }); }
+        else if (f.know === 'maybe') one('никогда не случается', x => { x.pct = 0; });
         else if (f.know === 'yesno') { one('всегда «нет»', x => { x.pct = 0; }); one('всегда «да»', x => { x.pct = 100; }); }
         else if (f.know === 'table') {
           const top = v.rows.reduce((a, r) => (r.pct > a.pct ? r : a), v.rows[0]);
-          one(`всегда самый частый вариант — ${fmtVal(top.value, u)}`, x => { const t2 = x.rows.reduce((a, r) => (r.pct > a.pct ? r : a), x.rows[0]); x.rows = [{ value: t2.value, pct: 100 }]; });
-        } else if (f.know === 'history' && v.history.length) one(`всегда как обычно — ${fmtVal(median(v.history), u)}`, x => { x.history = [median(x.history)]; });
+          one(`всегда ${fmtVal(top.value, u)} (самый частый вариант)`, x => { const t2 = x.rows.reduce((a, r) => (r.pct > a.pct ? r : a), x.rows[0]); x.rows = [{ value: t2.value, pct: 100 }]; });
+        } else if (f.know === 'history' && v.history.length) one(`всегда как обычно (${fmtVal(median(v.history), u)})`, x => { x.history = [median(x.history)]; });
       });
     } else if (s.scheme === 'parts' || s.scheme === 'all') {
       s.items.forEach((it, k) => {
@@ -1495,9 +1496,17 @@ const PASimple = (() => {
   const dots = p => { const k = Math.round(p * 100); return `<div class="dots" role="img" aria-label="${k} из 100">${Array.from({ length: 100 }, (_, i) => `<i class="${i < k ? 'y' : 'n'}"></i>`).join('')}</div>`; };
   const dot2 = s => s.replace(/\.(<\/b>)?\./g, '.$1');
 
-  function words(s) {
+  function words(s) { const w = wordsRaw(s); if (!w.sub) w.sub = w.yes; return w; }
+  function wordsRaw(s) {
     const dlShort = (dl, per) => deadlineText(dl, per).replace(/ — .*$/, '');
-    if (s.scheme === 'build') return { yes: 'условие выполнится', no: 'не выполнится', q: `${s.title || 'Расчёт'}: ${successText(s)}?` };
+    if (s.scheme === 'build') {
+      // «не больше 5 мин» / «больше 5 мин» — словами из самого условия
+      const c = s.success.cmp, val = fmtVal(s.success.value, unitOf(s, s.success.ref));
+      const YES = { '<=': 'не больше', '>=': 'не меньше', '<': 'меньше', '>': 'больше', '=': 'ровно' };
+      const NO = { '<=': 'больше', '>=': 'меньше', '<': 'не меньше', '>': 'не больше', '=': 'не ровно' };
+      return { yes: `${YES[c]} ${val}`, no: `${NO[c]} ${val}`, sub: `«${nameOf(s, s.success.ref)}» ${YES[c]} ${val}`,
+        q: `${s.title || 'Расчёт'}: ${successText(s)}?` };
+    }
     if (s.scheme === 'goal') return { yes: 'успеете', no: 'не успеете', q: `${s.title || 'Цель'}: успею ${dlShort(s.goal.deadline, s.goal.period)}?` };
     if (s.scheme === 'until') { const u = s.until; return { yes: u.words.act, no: `не ${u.words.act}`, q: `${s.title}: ${dlShort(u.deadline, u.period)}?` }; }
     if (s.scheme === 'tries') return { yes: s.tries.act || 'получится', no: `не ${s.tries.act || 'получится'}`, q: `${s.title || 'Попытки'}: хотя бы ${s.tries.need} из ${s.tries.n}?` };
@@ -1555,6 +1564,67 @@ const PASimple = (() => {
     return lo;
   }
 
+  /** Шанс словами: 0,54 -> «примерно каждый второй раз», 0,72 -> «примерно 7 раз из 10». */
+  const ORD = ['', 'каждый', 'каждый второй', 'каждый третий', 'каждый четвёртый', 'каждый пятый', 'каждый шестой',
+    'каждый седьмой', 'каждый восьмой', 'каждый девятый', 'каждый десятый'];
+  function inWords(p) {
+    if (p >= 0.95) return 'почти всегда';
+    if (p >= 0.6) return `примерно ${Math.round(p * 10)} раз из 10`;
+    if (p >= 0.095) return `примерно ${ORD[Math.min(10, Math.round(1 / p))]} раз`;
+    if (p >= 0.005) return 'реже, чем 1 раз из 10';
+    return 'почти никогда';
+  }
+
+  /** Расчёт конструктора словами: «самое большое из: «А», «Б»», «если «В» — да, то «Г», иначе 0». */
+  function stepText(s, x) {
+    const q = id => `«${nameOf(s, id)}»`;
+    const op = o => (o && o.ref ? q(o.ref) : o && Number.isFinite(o.num) ? fmtIn(o.num) : '—');
+    if (x.op === 'sum') return x.args.map(q).join(' + ');
+    if (x.op === 'max') return `самое большое из: ${x.args.map(q).join(', ')}`;
+    if (x.op === 'min') return `самое маленькое из: ${x.args.map(q).join(', ')}`;
+    if (x.op === 'diff') return `${op(x.a)} − ${op(x.b)}${x.clamp ? ', но не меньше 0' : ''}`;
+    if (x.op === 'mul') return `${op(x.a)} × ${op(x.b)}`;
+    if (x.op === 'if') {
+      const c = x.cond || {}, cond = c.cmp === 'yes' ? `${q(c.ref)} — да` : c.cmp === 'no' ? `${q(c.ref)} — нет` : `${q(c.ref)} ${CMP_TXT[c.cmp]} ${fmtIn(c.value)}`;
+      return `если ${cond}, то ${op(x.a)}, иначе ${op(x.b)}`;
+    }
+    return `формула ${x.formula}`;
+  }
+
+  /** Что задал человек — для отчёта. */
+  function inputsHtml(s) {
+    const row = (a, b) => `<tr><td>${a}</td><td>${b}</td></tr>`;
+    if (s.scheme === 'build') {
+      const f = s.factors.map(x => row(esc(x.name || 'Фактор'), summaryOf(x.know, x.v, x.unit) + (x.depOn && x.vc
+        ? `; когда «${esc(nameOf(s, x.depCause))}» — да: ${summaryOf(x.know, x.vc, x.unit)}` : ''))).join('');
+      const st = s.steps.map(x => `<li><b>${esc(x.name || 'Расчёт')}</b> = ${esc(stepText(s, x))}</li>`).join('');
+      return `<h3>Случайные факторы</h3><table class="r-tab">${f}</table>
+        ${st ? `<h3>Как получается итог</h3><ul>${st}</ul>` : ''}
+        <p>Итог — «${esc(nameOf(s, s.result))}». ${s.success.on ? `Хорошо, если <b>${esc(successText(s))}</b>.` : 'Условия успеха нет — показано, каким бывает итог.'}</p>`;
+    }
+    if (s.items) return `<table class="r-tab">${s.items.map((it, k) => row(esc(it.name || `Пункт ${k + 1}`), summaryOf(it.know, it.v, s.unit)
+      + (s.cause.on && it.byCause && it.vc ? `; когда «${esc(s.cause.name)}»: ${summaryOf(it.know, it.vc, s.unit)}` : ''))).join('')}</table>
+      ${s.cause.on ? `<p>Общая причина «${esc(s.cause.name)}» бывает в ${num(s.cause.pct)} % случаев.</p>` : ''}
+      <p>${s.scheme === 'all' ? 'Всё идёт одновременно, решает самое долгое.' : 'Части складываются.'}${s.limit.on ? ` Порог — ${fmtVal(s.limit.value, s.unit)}.` : ''}</p>`;
+    if (s.goal) {
+      const g = s.goal, P = PERIODS[g.period];
+      return `<table class="r-tab">${row('Сейчас → цель', `${fmtVal(g.start, s.unit)} → ${fmtVal(g.target, s.unit)}`)}
+        ${row(`За ${P.acc}`, summaryOf(g.step.know, g.step.v, s.unit))}
+        ${g.setback.on ? row(`Плохие ${P.many}`, `в ${num(g.setback.pct)} % случаев, назад на ${num(g.setback.from)}–${num(g.setback.to)} ${esc(s.unit)}`) : ''}
+        ${g.deadline.on ? row('Срок', esc(deadlineText(g.deadline, g.period))) : ''}</table>`;
+    }
+    if (s.until) {
+      const u = s.until, a = untilAttempts(u), P = PERIODS[u.period], w = untilWords(u);
+      return `<table class="r-tab">${row('Срок', esc(deadlineText(u.deadline, u.period)))}
+        ${row(`Сколько ${esc(w.many)} за ${P.acc}`, summaryOf(a.know, a.v, ''))}
+        ${funnelOn(u) ? row('Зовут на собеседование', `${num(u.funnel.invite)} %`) : ''}
+        ${row(`${esc(u.words.one)} заканчивается ${esc(u.words.succIns || 'успехом')}`, `${num(u.pct)} %`)}
+        ${funnelOn(u) ? row('Оффер подходит', `${num(u.funnel.ok)} %`) : ''}</table>`;
+    }
+    const t = s.tries;
+    return `<table class="r-tab">${row('Попыток', fmtIn(t.n))}${row('Одна попытка удаётся', `${num(t.pct)} %`)}${row('Нужно удачных', `хотя бы ${fmtIn(t.need)}`)}</table>`;
+  }
+
   function renderAnswer() {
     const { s, main } = last, S = main.summary, ev = S.event, R = S.result, W = words(s);
     const isGoal = s.scheme === 'goal', isUntil = s.scheme === 'until', isTries = s.scheme === 'tries', timeline = isGoal || isUntil;
@@ -1562,27 +1632,43 @@ const PASimple = (() => {
     const isB = s.scheme === 'build', unit = isB ? unitOf(s, s.result) : s.unit;
     const fv = x => (timeline ? fmtPeriods(x, period) : isTries ? `${Math.round(x)} из ${s.tries.n}` : fmtVal(x, unit));
     const notReached = timeline ? 1 - countLE(R.sorted, P.max) / R.sorted.length : 0;
+    const nRuns = S.n.toLocaleString('ru-RU');
+    const view = { title: s.title || 'Мой расчёт' };
     let html = '';
 
+    // ---- 1. главный ответ
+    const pdfBtn = '<button class="btn small s-pdf" data-s-act="pdf" title="Отчёт: что задано, ответ, графики — для печати или сохранения в PDF">📄 Отчёт в PDF</button>';
     if (ev) {
       const [lvl, word, icon] = verdict(ev.p);
+      view.big = `${of100(ev.p)} из 100`;
+      view.sub = `Примерно в ${of100(ev.p)} случаях из 100 ${W.sub} — ${inWords(ev.p)}.`;
+      view.verdict = word;
       html += `<section class="card s-answer">
-        <div class="badge-${lvl}"><span class="b-icon">${icon}</span>${word}</div>
+        <div class="s-ans-head"><div class="badge-${lvl}"><span class="b-icon">${icon}</span>${word}</div>${pdfBtn}</div>
         <div class="s-q">${esc(W.q)}</div>
         <div class="s-big">${of100(ev.p)} <span>из 100</span></div>
-        <div class="s-sub">Примерно в ${of100(ev.p)} случаях из 100 ${esc(W.yes)}.</div>
+        <div class="s-sub">${esc(view.sub)}</div>
         ${dots(ev.p)}
         <div class="legend"><span><i class="sw s1"></i>${esc(W.yes)}</span><span><i class="sw nn"></i>${esc(W.no)}</span></div>
+        <p class="s-how">Как посчитано: программа ${nRuns} раз «прожила» эту ситуацию — каждый раз случайные факторы выпадали так,
+          как вы их задали, — и посчитала, как часто вышло «${esc(W.yes)}». Каждая точка выше — 1 % этих случаев.</p>
       </section>`;
       sticky(`<span class="st-main"><b>${of100(ev.p)} из 100</b> · ${word}</span><span class="st-go">ответ ↓</span>`, lvl);
     } else {
       const label = isB ? `«${esc(nameOf(s, s.result))}» скорее всего` : isGoal ? 'Скорее всего дойдёте до цели за' : s.scheme === 'all' ? 'Скорее всего всё будет готово через' : 'Скорее всего выйдет';
-      html += `<section class="card s-answer"><div class="s-q">${esc(s.title || '')}</div><div class="s-label">${label}</div>
-        <div class="s-big s-big-text">${fv(R.pct[50])}</div><div class="s-sub">В 8 случаях из 10 — от ${fv(R.pct[10])} до ${fv(R.pct[90])}.</div></section>`;
+      view.big = fv(R.pct[50]);
+      view.sub = `В 8 случаях из 10 — от ${fv(R.pct[10])} до ${fv(R.pct[90])}.`;
+      html += `<section class="card s-answer"><div class="s-ans-head"><div class="s-q">${esc(s.title || '')}</div>${pdfBtn}</div>
+        <div class="s-label">${label}</div>
+        <div class="s-big s-big-text">${fv(R.pct[50])}</div><div class="s-sub">${view.sub}</div>
+        <p class="s-how">Как посчитано: программа ${nRuns} раз «прожила» эту ситуацию — каждый раз случайные факторы выпадали так,
+          как вы их задали, — и посмотрела, каким выходит итог.</p></section>`;
       sticky(`<span class="st-main"><b>≈ ${fv(R.pct[50])}</b></span><span class="st-go">ответ ↓</span>`, 'good');
     }
 
+    // ---- 2. сколько выходит (+ гистограмма)
     const lines = [];
+    let linesTitle = timeline ? 'Когда' : isTries ? 'Чего ждать' : 'Чего ждать и какой нужен запас';
     if (isTries) {
       const t = s.tries, p = t.pct / 100;
       lines.push(`Скорее всего удачных будет ${Math.round(R.pct[50])} из ${t.n}.`);
@@ -1611,13 +1697,16 @@ const PASimple = (() => {
         }
       }
     } else if (isB) {
-      const nmR = esc(nameOf(s, s.result)), c = s.success.cmp;
-      lines.push(`«${nmR}» скорее всего ≈ <b>${fv(R.pct[50])}</b>; в 8 случаях из 10 — от ${fv(R.pct[10])} до ${fv(R.pct[90])}.`);
-      lines.push(`Самое маленькое за все прогоны — ${fv(R.min)}, самое большое — ${fv(R.max)}.`);
+      const nmR = esc(nameOf(s, s.result)), c = s.success.cmp, thr = fmtVal(s.success.value, unit);
+      linesTitle = `Сколько выходит «${nmR}»`;
+      lines.push(`Обычно — около <b>${fv(R.pct[50])}</b>: в половине случаев меньше, в половине больше.`);
+      lines.push(`В 8 случаях из 10 — от ${fv(R.pct[10])} до ${fv(R.pct[90])}. Самое большое, что выпадало, — ${fv(R.max)}${R.min < R.pct[10] ? `, самое маленькое — ${fv(R.min)}` : ''}.`);
       if (ev && s.success.ref === s.result && (c === '<=' || c === '<'))
-        lines.push(`Чтобы условие выполнялось в 9 случаях из 10, порог должен быть не меньше <b>${fv(R.pct[90])}</b>; в 99 из 100 — ${fv(R.pct[99])}.`);
+        lines.push(ev.p < 0.9 ? `Чтобы условие выполнялось 9 раз из 10, порог пришлось бы поднять с ${thr} до <b>${fv(R.pct[90])}</b>.`
+          : `Запас есть: даже 9 раз из 10 выходит не больше ${fv(R.pct[90])} (порог — ${thr}).`);
       if (ev && s.success.ref === s.result && (c === '>=' || c === '>'))
-        lines.push(`Чтобы условие выполнялось в 9 случаях из 10, порог должен быть не больше <b>${fv(R.pct[10])}</b>; в 99 из 100 — ${fv(R.pct[1])}.`);
+        lines.push(ev.p < 0.9 ? `Чтобы условие выполнялось 9 раз из 10, порог пришлось бы опустить с ${thr} до <b>${fv(R.pct[10])}</b>.`
+          : `Запас есть: даже 9 раз из 10 выходит не меньше ${fv(R.pct[10])} (порог — ${thr}).`);
     } else {
       if (ev) lines.push(`Скорее всего выйдет ${fmtVal(R.pct[50], s.unit)}.`);
       lines.push(`Чтобы ${W.inf} в 9 случаях из 10 — ${W.reserve} <b>${fmtVal(R.pct[90], s.unit)}</b>.`);
@@ -1629,11 +1718,16 @@ const PASimple = (() => {
       }
     }
     // проверка на оптимизм: люди обычно недооценивают сроки и траты (ошибка планирования)
-    if (last.pess) lines.push(`<span class="opt">Проверка на оптимизм:</span> если всё на четверть хуже, чем вы думаете, — ${pessText(last.pess, s)}.`);
+    if (last.pess) lines.push(`<span class="opt">Проверка на оптимизм.</span> Люди обычно недооценивают задержки и траты. Если всё на четверть хуже, чем вы вписали, — ${pessText(last.pess, s)}${last.pess.kind === 'p' && ev ? ` вместо ${of100(ev.p)}` : ''}.`);
     else if (!(isB && !ev)) lines.push('<span class="muted">Проверяю на оптимизм…</span>');
-    html += `<section class="card"><h3>${timeline ? 'Когда' : isTries || isB ? 'Чего ждать' : 'Чего ждать и какой нужен запас'}</h3>
+    view.linesTitle = linesTitle; view.lines = lines.filter(l => !/Проверяю на оптимизм/.test(l)).map(dot2);
+    const hasHist = !isTries && !timeline;
+    const histNote = ev ? `Столбики — как часто выпадало каждое значение итога. Синие — «${esc(W.yes)}», оранжевые — «${esc(W.no)}».`
+      : 'Столбики — как часто выпадало каждое значение итога: чем выше, тем чаще.';
+    html += `<section class="card"><h3>${linesTitle}</h3>
       <ul class="plain">${lines.map(l => `<li>${dot2(l)}</li>`).join('')}</ul>
-      ${timeline ? `<h4 class="s-h4">Шанс к каждой дате</h4><div class="chart" id="s-cum"></div>` : ''}</section>`;
+      ${timeline ? `<h4 class="s-h4">Шанс к каждой дате</h4><div class="chart" id="s-cum"></div>` : ''}
+      ${hasHist ? `<h4 class="s-h4">Как часто что выпадало</h4><p class="sub">${histNote}</p><div class="chart" id="s-hist"></div>` : ''}</section>`;
 
     const warn = [];
     if (timeline && notReached > 0.01) warn.push(`В ${of100(notReached)} случаях из 100 это не происходит даже за ${fmtPeriods(P.max, period)}. Похоже, темп слишком медленный.`);
@@ -1644,33 +1738,45 @@ const PASimple = (() => {
     if (isGoal) hist('темп', s.goal.step.v, s.goal.step.know);
     if (isUntil) hist(untilWords(s.until).many, untilAttempts(s.until).v, untilAttempts(s.until).know);
     if (few.length) warn.push(`Мало прошлых значений (${few.map(x => `«${esc(x)}»`).join(', ')}): ответ примерный. Чем больше впишете, тем точнее.`);
+    view.warn = warn;
     if (warn.length) html += `<section class="card s-warn"><h3>Обратите внимание</h3><ul class="plain">${warn.map(w => `<li>${w}</li>`).join('')}</ul></section>`;
 
+    // ---- 3. что поможет
     const base = metric(s, S);
+    view.ideas = null;
     if (isB && !ev) { /* без условия успеха непонятно, что «лучше», — советов нет */ }
     else if (!last.ideas) html += `<section class="card"><h3>Что поможет больше всего</h3><p class="sub">Считаю…</p></section>`;
     else {
       const better = m => (m.kind === 'p' ? m.value - base.value : base.value - m.value);
-      const good = last.ideas.filter(x => better(x.metric) > (base.kind === 'p' ? 0.005 : 1e-9)).sort((a, b) => better(b.metric) - better(a.metric));
+      const good = last.ideas.filter(x => better(x.metric) > (base.kind === 'p' ? 0.005 : 1e-9)).sort((a, b) => better(b.metric) - better(a.metric)).slice(0, 5);
       const was = metricText(base, s);
+      const label = x => (x.phr ? `Если «${esc(x.name)}» ${esc(x.what)}` : `<b>${esc(x.name)}</b> — ${esc(x.what)}`);
+      const numTxt = x => (base.kind === 'p' ? `${of100(base.value)} → <b>${of100(x.metric.value)}</b> из 100 <small>+${Math.round(better(x.metric) * 100)}</small>` : metricText(x.metric, s));
+      view.ideas = good.map(x => ({ label: label(x), num: numTxt(x) }));
+      const intro = isB ? 'Что будет, если один фактор перестанет быть случайным (остальные — как есть):'
+        : base.kind === 'p' ? `Сейчас ${esc(W.sub)} в ${was}. Если изменить одно:` : base.kind === 'median' ? `Сейчас скорее всего ${was}. Если изменить одно:` : `Сейчас в плохом случае (1 из 10) ${was}. Если изменить одно:`;
+      view.ideasIntro = intro;
       html += `<section class="card"><h3>Что поможет больше всего</h3>${good.length
-        ? `<p class="sub">${base.kind === 'p' ? `Сейчас ${esc(W.yes)} в ${was}. Если изменить одно:` : base.kind === 'median' ? `Сейчас скорее всего ${was}. Если изменить одно:` : `Сейчас в плохом случае (1 из 10) ${was}. Если изменить одно:`}</p>
-          <div class="ideas">${good.slice(0, 5).map(x => {
+        ? `<p class="sub">${intro}</p>
+          <div class="ideas">${good.map((x, i) => {
             const gain = better(x.metric);
             const width = base.kind === 'p' ? [base.value * 100, gain * 100] : [60, Math.min(40, 40 * gain / Math.max(1e-9, base.value))];
-            return `<div class="idea"><div class="idea-text"><b>${esc(x.name)}</b> — ${esc(x.what)}</div>
-              <div class="idea-bar"><span class="now" style="width:${width[0]}%"></span><span class="gain" style="width:${width[1]}%"></span></div>
-              <div class="idea-num">${metricText(x.metric, s)}${base.kind === 'p' ? ` <small>+${Math.round(gain * 100)}</small>` : ''}</div></div>`;
+            return `<div class="idea"><div class="idea-text">${view.ideas[i].label}</div>
+              <div class="idea-bar" title="Серым — как сейчас, зелёным — сколько прибавится"><span class="now" style="width:${width[0]}%"></span><span class="gain" style="width:${width[1]}%"></span></div>
+              <div class="idea-num">${view.ideas[i].num}</div></div>`;
           }).join('')}</div>` : '<p class="sub">Ни одна отдельная вещь заметно не влияет.</p>'}</section>`;
     }
 
+    view.indep = '';
     if (last.indep && ev) {
       const p2 = last.indep.event.p, d = Math.round((p2 - ev.p) * 100);
       const cause = isB ? [...new Set(s.factors.filter(f => f.depOn).map(f => nameOf(s, f.depCause)))].join('», «') : s.cause.name;
-      html += `<section class="card"><h3>Почему важна общая причина</h3><p>Если считать ${isB ? 'факторы' : 'части'} по отдельности и забыть, что «${esc(cause)}» влияет сразу на несколько, получилось бы
-        <b>${of100(p2)} из 100</b>${d ? ` — на ${Math.abs(d)} ${d > 0 ? 'больше' : 'меньше'}, чем на самом деле` : ', почти так же'}. Плохие случаи приходят вместе.</p></section>`;
+      view.indep = `Если считать ${isB ? 'факторы' : 'части'} по отдельности и забыть, что «${esc(cause)}» влияет сразу на несколько, получилось бы
+        <b>${of100(p2)} из 100</b>${d ? ` — на ${Math.abs(d)} ${d > 0 ? 'больше' : 'меньше'}, чем на самом деле` : ', почти так же'}. Плохие случаи приходят вместе.`;
+      html += `<section class="card"><h3>Почему важна общая причина</h3><p>${view.indep}</p></section>`;
     }
 
+    view.compare = '';
     if (calc.variants.length === 2) {
       const o = last.other, me = calc.active ? 'Б' : 'А';
       if (!o) html += `<section class="card"><h3>Сравнение вариантов</h3><p class="sub">${calc.variants[1 - calc.active].scheme && check(calc.variants[1 - calc.active]).ok ? 'Считаю…' : 'Во втором варианте нужно заполнить ответы.'}</p></section>`;
@@ -1684,31 +1790,69 @@ const PASimple = (() => {
         }
         const p90 = (sx, Sx) => (sx.scheme === 'goal' ? fmtPeriods(Sx.result.pct[90], sx.goal.period) : sx.scheme === 'until' ? fmtPeriods(Sx.result.pct[90], sx.until.period)
           : sx.scheme === 'tries' ? '—' : fmtVal(Sx.result.pct[90], sx.scheme === 'build' ? unitOf(sx, sx.result) : sx.unit));
-        html += `<section class="card"><h3>Сравнение вариантов</h3>
-          <div class="table-wrap"><table class="cmp"><thead><tr><th></th><th>Вариант ${me} (сейчас)</th><th>Вариант ${o.label}</th></tr></thead><tbody>
-          <tr><td>${mm.kind === 'p' ? `Шанс, что ${esc(W.yes)}` : mm.kind === 'median' || mm.kind === 'val' ? 'Скорее всего' : 'В плохом случае (1 из 10)'}</td><td>${metricText(mm, s)}</td><td>${metricText(mo, o.s)}</td></tr>
+        view.compare = `<div class="table-wrap"><table class="cmp"><thead><tr><th></th><th>Вариант ${me} (сейчас)</th><th>Вариант ${o.label}</th></tr></thead><tbody>
+          <tr><td>${mm.kind === 'p' ? `Шанс, что ${esc(W.sub)}` : mm.kind === 'median' || mm.kind === 'val' ? 'Скорее всего' : 'В плохом случае (1 из 10)'}</td><td>${metricText(mm, s)}</td><td>${metricText(mo, o.s)}</td></tr>
           ${!isTries ? `<tr><td>${isB ? '9 из 10 не больше' : 'Запас на 9 из 10'}</td><td>${p90(s, S)}</td><td>${p90(o.s, o.summary)}</td></tr>` : ''}
-          </tbody></table></div><p class="verdict">${verdictTxt}</p></section>`;
+          </tbody></table></div><p class="verdict">${verdictTxt}</p>`;
+        html += `<section class="card"><h3>Сравнение вариантов</h3>${view.compare}</section>`;
       }
     }
 
-    if (!isTries && !timeline) html += `<section class="card"><h3>${timeline ? `Сколько ${P.forms[2]} уходит` : 'Как часто какой итог'}</h3>
-      ${ev ? `<div class="legend"><span><i class="sw s1"></i>${esc(W.yes)}</span><span><i class="sw s2"></i>${esc(W.no)}</span></div>` : ''}
-      <div class="chart" id="s-hist"></div></section>`;
-
+    // ---- 4. подробности
     const hinted = (s.goal && s.goal.hint) || (s.until && s.until.words.hint) || (s.tries && s.tries.hint);
-    html += `<p class="note s-honest">Ответ настолько точен, насколько точны ваши оценки${hinted ? ' (подсказки «не знаете?» — очень примерные)' : ''}. Программа проигрывает ситуацию ${S.n.toLocaleString('ru-RU')} раз.</p>
+    view.details = [
+      ev ? `Вероятность: ${pct(ev.p, 2)} ± ${pct(ev.hi - ev.p, 2)} (95 % интервал), ${nRuns} прогонов Монте-Карло, сид ${SEED}.`
+        : `${nRuns} прогонов Монте-Карло, сид ${SEED}. Перцентили: P10 ${num(R.pct[10])}, P50 ${num(R.pct[50])}, P90 ${num(R.pct[90])}, P99 ${num(R.pct[99])}.`,
+      last.exact && ev ? `Точный ответ полным перебором ${last.exact.combos.toLocaleString('ru-RU')} вариантов: ${pct(last.exact.p, 2)}.` : '',
+      isTries && ev ? `Точно по биномиальной формуле: ${pct(binomAtLeast(s.tries.n, s.tries.pct / 100, s.tries.need), 2)}.` : '',
+      `Итог: <code>${esc(last.sc.result.formula)}</code>${last.sc.event ? `, успех: <code>${esc(last.sc.event.formula)}</code>` : ''}.`,
+    ].filter(Boolean);
+    html += `<p class="note s-honest">Ответ настолько точен, насколько точны ваши оценки${hinted ? ' (подсказки «не знаете?» — очень примерные)' : ''}.</p>
       <details class="card s-details"><summary>Подробности расчёта</summary>
-      <ul class="plain">
-        ${ev ? `<li>Вероятность: ${pct(ev.p, 2)} ± ${pct(ev.hi - ev.p, 2)} (95 % интервал), ${S.n.toLocaleString('ru-RU')} прогонов, сид ${SEED}.</li>` : `<li>${S.n.toLocaleString('ru-RU')} прогонов Монте-Карло, сид ${SEED}. Перцентили: P10 ${num(R.pct[10])}, P50 ${num(R.pct[50])}, P90 ${num(R.pct[90])}, P99 ${num(R.pct[99])}.</li>`}
-        ${last.exact && ev ? `<li>Точный ответ полным перебором ${last.exact.combos.toLocaleString('ru-RU')} вариантов: ${pct(last.exact.p, 2)}.</li>` : ''}
-        ${isTries && ev ? `<li>Точно по биномиальной формуле: ${pct(binomAtLeast(s.tries.n, s.tries.pct / 100, s.tries.need), 2)}.</li>` : ''}
-        <li>Итог: <code>${esc(last.sc.result.formula)}</code>${last.sc.event ? `, успех: <code>${esc(last.sc.event.formula)}</code>` : ''}.</li>
-      </ul>
-      </details>`;
+      <ul class="plain">${view.details.map(d => `<li>${d}</li>`).join('')}</ul></details>`;
 
     $('#s-results').innerHTML = html;
+    last.view = view;
     drawHist();
+    buildReport();
+  }
+
+  // ===================================================================================
+  // Отчёт для печати и PDF: отдельный блок #s-report, на экране скрыт, при печати — только он
+  // ===================================================================================
+  function buildReport() {
+    const box = $('#s-report');
+    if (!box || !last || !last.view) return;
+    const { s, view } = last;
+    const chart = sel => { const svg = $(`${sel} svg`); return svg ? `<div class="r-chart">${svg.outerHTML}</div>` : ''; };
+    const when = new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    box.innerHTML = `
+      <header class="r-head"><div class="r-app">Анализатор вероятностей · отчёт о расчёте</div>
+        <h1>${esc(view.title)}</h1><div class="r-meta">${esc(when)}</div></header>
+      <section><h2>Ответ</h2>
+        <div class="r-big">${esc(view.big)}${view.verdict ? ` <span>· ${esc(view.verdict)}</span>` : ''}</div>
+        <p>${esc(view.sub)}</p></section>
+      <section><h2>Что задано</h2>${inputsHtml(s)}</section>
+      <section><h2>${view.linesTitle}</h2><ul>${view.lines.map(l => `<li>${l}</li>`).join('')}</ul>
+        ${chart('#s-cum')}${chart('#s-hist')}</section>
+      ${view.warn.length ? `<section><h2>Обратите внимание</h2><ul>${view.warn.map(w => `<li>${w}</li>`).join('')}</ul></section>` : ''}
+      ${view.ideas && view.ideas.length ? `<section><h2>Что поможет больше всего</h2><p>${view.ideasIntro}</p>
+        <table class="r-tab">${view.ideas.map(x => `<tr><td>${x.label}</td><td class="r-num">${x.num}</td></tr>`).join('')}</table></section>` : ''}
+      ${view.indep ? `<section><h2>Почему важна общая причина</h2><p>${view.indep}</p></section>` : ''}
+      ${view.compare ? `<section><h2>Сравнение вариантов</h2>${view.compare}</section>` : ''}
+      <section><h2>Как посчитано</h2>
+        <p>Метод Монте-Карло: ситуация проигрывается много раз, в каждом прогоне случайные факторы выпадают по заданным
+          распределениям, и считается, как часто выполняется условие. Генератор с сидом: тот же расчёт всегда даёт те же числа.</p>
+        <ul>${view.details.map(d => `<li>${d}</li>`).join('')}</ul></section>
+      <footer class="r-foot">Анализатор вероятностей — https://maksim-121.github.io/probability-analyzer/</footer>`;
+  }
+  function printReport() {
+    if (!last) return;
+    buildReport();
+    const t = document.title;
+    document.title = `Отчёт — ${last.view ? last.view.title : 'расчёт'}`;   // это имя предложит браузер для файла PDF
+    window.print();
+    document.title = t;
   }
 
   /** График «шанс к каждой дате» для целей и «до срока». */
@@ -1772,6 +1916,7 @@ const PASimple = (() => {
     renderMyCount();
     render();
     if (sit().scheme) run();
+    window.addEventListener('beforeprint', buildReport);   // и для Ctrl + P
     let rt;
     window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawHist, 150); });
   }

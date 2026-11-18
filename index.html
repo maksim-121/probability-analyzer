@@ -335,6 +335,46 @@
   .s-big-text { font-size: 40px; }
   .s-warn { border-color: transparent; background: var(--warn-bg); }
   .s-honest { margin: 0 4px; }
+  /* ответ: шапка с кнопкой отчёта, пояснение «как посчитано» */
+  .s-ans-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .s-ans-head .s-q { margin-top: 0; }
+  .s-pdf { margin-left: auto; }
+  .s-how { color: var(--text-2); font-size: 13px; margin: 10px 0 0; padding-top: 10px; border-top: 1px solid var(--line); }
+  .idea-num b { font-weight: 750; }
+
+  /* отчёт: на экране не виден, при печати (и «Сохранить как PDF») — только он */
+  .s-report { display: none; }
+  @media print {
+    :root:root:root {
+      color-scheme: light;
+      --page: #ffffff; --surface: #ffffff; --card: #ffffff;
+      --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+      --line: #e1e0d9; --axis: #c3c2b7; --ring: rgba(11, 11, 11, 0.10);
+      --s1: #2a78d6; --s2: #eb6834; --band: rgba(42, 120, 214, 0.10); --range: #c3c2b7;
+      --good: #006300; --bad: #b3261e;
+    }
+    @page { size: A4; margin: 14mm 14mm 16mm; }
+    body { background: #fff; font-size: 12px; }
+    body > *:not(#s-report) { display: none !important; }
+    .s-report { display: block; color: #0b0b0b; }
+  }
+  .s-report h1 { font-size: 22px; margin: 2px 0; }
+  .s-report h2 { font-size: 15px; margin: 18px 0 6px; padding-bottom: 3px; border-bottom: 1.5px solid #2a78d6; }
+  .s-report h3 { font-size: 13px; margin: 10px 0 4px; }
+  .s-report section { break-inside: avoid; }
+  .s-report p, .s-report li { margin: 3px 0; line-height: 1.45; }
+  .s-report ul { margin: 4px 0; padding-left: 18px; }
+  .r-app { color: #52514e; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .r-meta { color: #52514e; font-size: 11px; }
+  .r-big { font-size: 34px; font-weight: 700; line-height: 1.1; }
+  .r-big span { font-size: 16px; font-weight: 600; color: #52514e; }
+  .r-tab { border-collapse: collapse; width: 100%; margin: 4px 0; }
+  .r-tab td { border-bottom: 1px solid #e1e0d9; padding: 4px 6px; vertical-align: top; }
+  .r-tab td:first-child { font-weight: 600; width: 38%; }
+  .r-tab .r-num { white-space: nowrap; text-align: right; font-weight: 400; }
+  .r-chart svg { max-width: 100%; height: auto; }
+  .r-chart .hit { display: none; }
+  .r-foot { margin-top: 18px; color: #898781; font-size: 10px; }
   .s-my-list { width: 100%; max-width: 640px; padding: 10px 14px; }
   .s-my-list ul { list-style: none; margin: 0; padding: 0; }
   .s-my-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--line); }
@@ -408,6 +448,8 @@
   <a href="tests/selftest.html">самопроверка движка</a>.
 </footer>
 <div class="tip" id="tip" hidden></div>
+
+<div id="s-report" class="s-report" aria-hidden="true"></div>
 
 <script src="engine/engine.js"></script>
 <script src="engine/templates.js"></script>
