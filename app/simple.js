@@ -1,18 +1,16 @@
 /*
- * Простой режим — для обычного человека, без формул и терминов.
+ * Интерфейс приложения.
  *
  * Главное — универсальный конструктор (схема build), как в задании: человек сам задаёт случайные факторы
  * с их распределениями (точно, примерно, любое от–до, может случиться, да / нет, варианты с процентами,
- * по прошлым данным), может связать фактор с общей причиной, собирает из факторов итог блоками
- * (сумма, самое большое, разница, если…то…, своя формула) и пишет условие успеха. Ничего не угадывается,
- * поэтому новая ситуация не «ломает» программу. Рядом — особые расчёты «во времени» и старые схемы:
- *   parts — «Успею ли? Хватит ли?»: части складываются (дорога, бюджет, ремонт по этапам);
- *   all   — «Соберутся ли все? Будет ли всё готово?»: решает самое долгое;
- *   goal  — «Когда дойду до цели?»: каждый период понемногу приближаюсь (вес, жим, накопления, учёба);
+ * по прошлым данным — в том числе из CSV-файла), может связать фактор с общей причиной, собирает из факторов
+ * итог блоками (сумма, самое большое, разница, если…то…, своя формула) и пишет условие успеха.
+ * Ничего не угадывается, поэтому новая ситуация не «ломает» программу.
+ * Рядом — особые расчёты «во времени», которые неудобно собирать из блоков:
+ *   goal  — «Когда дойду до цели?»: каждый период понемногу приближаюсь (вес, жим, накопления);
  *   until — «Получится ли до срока?»: пробую, пока не выйдет (работа, продажа) — попытки во времени;
  *   tries — «Получится ли с нескольких попыток?»: фиксированное число попыток (экзамен, поступление).
- * Про каждое число — «Что вы о нём знаете?»: точно / примерно / может случиться / как было раньше.
- * Из ответов собирается обычный сценарий движка (engine/engine.js).
+ * Из ответов собирается обычный сценарий движка (engine/engine.js). Ответ — словами, плюс отчёт для печати и PDF.
  *
  * Расчёт («Мои расчёты») = один или два варианта (сравнение «а что если»); сохраняется сам, отправляется ссылкой.
  */
@@ -31,11 +29,6 @@ const PASimple = (() => {
   // Словарь
   // ===================================================================================
   const SCHEMES = {
-    parts: { icon: '🧩', title: 'Успею ли? Хватит ли?', sub: 'Время или деньги складываются из частей',
-      ex: 'дорога, бюджет, ремонт по этапам', itemsQ: 'Из каких частей складывается?', add: '+ Добавить часть',
-      ph: 'Например: дорога до аэропорта' },
-    all: { icon: '👥', title: 'Соберутся ли все? Будет ли всё готово?', sub: 'Всё идёт одновременно, решает самое долгое',
-      ex: 'встреча, несколько дел сразу', itemsQ: 'Кого или что ждём?', add: '+ Добавить', ph: 'Например: Иван, едет на автобусе' },
     goal: { icon: '📈', title: 'Когда дойду до цели?', sub: 'Понемногу приближаюсь, иногда откатываюсь',
       ex: 'похудеть, жим 100 кг, накопить, выучить' },
     until: { icon: '🔁', title: 'Получится ли до срока?', sub: 'Пробую, пока не выйдет',
@@ -77,6 +70,14 @@ const PASimple = (() => {
     if (unit === 'дн.') { const d = Math.round(x); return `${d} ${plural(d, ['день', 'дня', 'дней'])}`; }
     return `${num(x)}${unit ? ' ' + unit : ''}`;
   }
+  /** Оценка (результат расчёта) без ложной точности: 3 значащие цифры у больших чисел — 62 175 ₽ -> «62 200 ₽». */
+  function fmtEst(x, unit) {
+    if (!Number.isFinite(x)) return '—';
+    if (unit === 'мин' || unit === 'ч' || unit === 'дн.') return fmtVal(x, unit);
+    const a = Math.abs(x);
+    if (a >= 1000) { const p = 10 ** (Math.floor(Math.log10(a)) - 2); return fmtVal(Math.round(x / p) * p, unit); }
+    return fmtVal(x, unit);
+  }
   /** Число периодов для людей: 41 -> «41 неделя (≈ 9,5 мес.)». */
   function fmtPeriods(k, period) {
     const P = PERIODS[period], n = Math.round(k);
@@ -92,8 +93,6 @@ const PASimple = (() => {
   const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const fromIso = s => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || ''); return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null; };
   const fmtDate = s => { const d = fromIso(s); return d ? d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: d.getFullYear() === today().getFullYear() ? undefined : 'numeric' }) : '—'; };
-  /** Ближайшая будущая дата «день, месяц». */
-  const nextDate = (day, month) => { const t = today(); let d = new Date(t.getFullYear(), month, day); if (d <= t) d = new Date(t.getFullYear() + 1, month, day); return iso(d); };
   const daysLeft = s => { const d = fromIso(s); return d ? Math.round((d - today()) / 864e5) : NaN; };
   /** Срок в периодах: дата -> сколько целых периодов осталось; «через N» — N. */
   function deadlinePeriods(dl, period) {
@@ -114,15 +113,12 @@ const PASimple = (() => {
   // ===================================================================================
   const V = o => ({ exact: 10, usual: 10, min: 5, max: 20, pct: 30, from: 5, to: 15, history: [],
     rows: [{ value: 0, pct: 50 }, { value: 10, pct: 50 }], ...o });
-  const item = (name, know, v) => ({ name, know, v: V(v), byCause: false, vc: null });
   const DL = (o = {}) => ({ on: true, mode: 'date', date: iso(new Date(today().getFullYear(), 11, 31)), value: 12, ...o });
   const WORDS_UNTIL = { one: 'попытка', few: 'попытки', many: 'попыток', succ: 'успех', succFew: 'успеха', succMany: 'успехов',
     succIns: 'успехом', act: 'получится', inf: 'получилось', hint: '' };
 
   function blank(scheme) {
-    const base = { v: 3, scheme, title: '', unit: 'мин', limit: { on: true, value: 60 }, cause: { on: false, name: 'Дождь', pct: 30 } };
-    if (scheme === 'parts') return { ...base, title: 'Моя ситуация', items: [item('', 'approx', { usual: 20, min: 10, max: 40 })] };
-    if (scheme === 'all') return { ...base, title: 'Встреча', limit: { on: true, value: 5 }, items: [item('', 'approx', { usual: 5, min: 0, max: 15 })] };
+    const base = { v: 3, scheme, title: '', unit: 'мин' };
     if (scheme === 'goal') return { ...base, title: 'Моя цель', unit: 'кг', goal: { start: 80, target: 100, period: 'неделя',
       step: { know: 'approx', v: V({ exact: 0.5, usual: 0.5, min: 0, max: 1.5 }) },
       setback: { on: false, pct: 20, from: 0, to: 1 }, deadline: DL({ on: false }) } };
@@ -134,216 +130,38 @@ const PASimple = (() => {
   const calcOf = sit => ({ id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), variants: [sit], active: 0 });
 
   // ===================================================================================
-  // Темы: узнаём вопрос по словам
+  // Примеры особых расчётов (ссылки #simple=<id>)
   // ===================================================================================
-  const WORDNUM = { 'одн': 1, 'дв': 2, 'тр': 3, 'четыр': 4, 'пят': 5, 'шест': 6, 'сем': 7, 'восьм': 8, 'девят': 9, 'десят': 10 };
-  const MONTHS = ['январ', 'феврал', 'март', 'апрел', 'ма', 'июн', 'июл', 'август', 'сентябр', 'октябр', 'ноябр', 'декабр'];
-
-  /** Срок из текста: «до нового года», «к лету», «до 1 марта», «к сентябрю», «за 3 месяца», «за год». */
-  function parseDeadline(t) {
-    const y = today().getFullYear();
-    if (/нов(ого|ый|ому)\s*год|новогод|конц\S*\s+года/.test(t)) return DL({ date: iso(new Date(y, 11, 31)) });
-    let m = /(?:до|к)\s+(\d{1,2})\s+(январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр)/.exec(t);
-    if (m) { const mi = MONTHS.findIndex(x => m[2].startsWith(x)); return DL({ date: nextDate(+m[1], mi) }); }
-    m = /(?:до|к)\s+(январ|феврал|март|апрел|ма[яюй]|июн|июл|август|сентябр|октябр|ноябр|декабр)/.exec(t);
-    if (m) { const mi = MONTHS.findIndex(x => m[1].startsWith(x)); return DL({ date: nextDate(1, mi) }); }
-    if (/(до|к)\s+конц\S*\s+месяц/.test(t)) return DL({ date: iso(new Date(y, today().getMonth() + 1, 0)) });
-    const seasons = [[/(до|к)\s+весн/, 2], [/(до|к)\s+лет/, 5], [/(до|к)\s+осен/, 8], [/(до|к)\s+зим/, 11]];
-    for (const [re, mo] of seasons) if (re.test(t)) return DL({ date: nextDate(1, mo) });
-    m = /(?:за|через)\s+(\d+|полгода|год)\s*(недел|месяц|дн|день|год|лет)?/.exec(t);
-    if (m) {
-      if (m[1] === 'полгода') return DL({ mode: 'n', value: 6, unit: 'месяц' });
-      if (m[1] === 'год') return DL({ mode: 'n', value: 12, unit: 'месяц' });
-      if (m[2] === 'год' || m[2] === 'лет') return DL({ mode: 'n', value: +m[1] * 12, unit: 'месяц' });
-      const unit = !m[2] || m[2].startsWith('недел') ? 'неделя' : m[2].startsWith('месяц') ? 'месяц' : 'день';
-      return DL({ mode: 'n', value: +m[1], unit });
-    }
-    if (/за\s+год|хочу\s+за\s+год/.test(t)) return DL({ mode: 'n', value: 12, unit: 'месяц' });
-    return null;
-  }
-  /** Число перед словом: «100 кг», «150 000 ₽», «150 тысяч», «150к». */
-  function parseAmount(t, after) {
-    const m = new RegExp(`(\\d[\\d\\s]*(?:[.,]\\d+)?)\\s*(тыс\\S*|к(?=[\\s.,!?]|$)|млн\\S*)?\\s*${after}`).exec(t);
-    if (!m) return NaN;
-    let x = parseNum(m[1]);
-    if (m[2]) x *= /^млн/.test(m[2]) ? 1e6 : 1e3;
-    return x;
-  }
-  const wordNum = t => { for (const [k, v] of Object.entries(WORDNUM)) if (new RegExp(`(^|\\s)${k}`).test(t)) return v; return NaN; };
-  /** Срок из текста в нужных периодах (неделя / месяц / день). */
-  function dlFor(t, period, fb) {
-    const d = parseDeadline(t);
-    if (!d) return fb;
-    if (d.mode === 'n' && d.unit && d.unit !== period) d.value = Math.max(1, Math.round(d.value * PERIODS[d.unit].days / PERIODS[period].days));
-    delete d.unit;
-    d.on = true;
-    return d;
-  }
-
-  const TOPICS = [
-    { id: 'job', re: /(работ|ваканс|оффер|собесед|трудоустро)/, say: 'вы ищете работу. Посчитаю, найдёте ли до срока', build: t => {
+  const goalOf = (title, unit, g) => ({ ...blank('goal'), title, unit, goal: { period: 'неделя', deadline: DL({ on: false }), ...g } });
+  const EXAMPLES_S = [
+    { id: 'bench', label: 'Когда пожму 100 кг', make: () => goalOf('Пожать 100 кг', 'кг', { start: 80, target: 100,
+      step: { know: 'approx', v: V({ exact: 0.5, usual: 0.5, min: 0, max: 1.5 }) }, setback: { on: true, pct: 20, from: 0, to: 1 },
+      deadline: DL({ mode: 'n', value: 52 }),
+      hint: 'Не знаете темп? У любителей обычно +0,5–1 кг в неделю, у опытных медленнее. Впишите свой текущий результат.' }) },
+    { id: 'weight', label: 'Похудеть до 80 кг', make: () => goalOf('Похудеть до 80 кг', 'кг', { start: 92, target: 80,
+      step: { know: 'approx', v: V({ exact: 0.5, usual: 0.6, min: 0.2, max: 1.2 }) }, setback: { on: true, pct: 20, from: 0.3, to: 1.5 },
+      deadline: DL({ mode: 'n', value: 40 }), hint: 'Не знаете темп? Безопасно — 0,5–1 кг в неделю. Впишите, сколько весите сейчас.' }) },
+    { id: 'savings', label: 'Накопить 150 000 ₽', make: () => goalOf('Накопить 150 000 ₽', '₽', { start: 20000, target: 150000, period: 'месяц',
+      step: { know: 'approx', v: V({ exact: 15000, usual: 15000, min: 8000, max: 20000 }) }, setback: { on: true, pct: 15, from: 0, to: 15000 },
+      deadline: DL({ mode: 'n', value: 12 }), hint: 'Сколько обычно получается отложить за месяц. Плохой месяц — крупные непредвиденные траты.' }) },
+    { id: 'job', label: 'Найти работу до Нового года', make: () => {
       const s = blank('until');
       s.title = 'Найти новую работу';
-      s.until.attempts.v = V({ exact: 2, usual: 2, min: 1, max: 4 });
       s.until.pct = 15;
-      s.until.deadline = dlFor(t, 'неделя', DL());
       s.until.words = { one: 'собеседование', few: 'собеседования', many: 'собеседований', succ: 'оффер', succFew: 'оффера', succMany: 'офферов',
         succIns: 'оффером', act: 'найдёте работу', inf: 'найти работу', hint: 'Не знаете? Обычно 1–2 из 10 собеседований заканчиваются оффером (очень примерно).' };
-      // цепочка «отклики → зовут на собеседование → оффер → оффер подходит»: число откликов человек знает лучше,
-      // чем число собеседований; галочкой можно вернуться к «знаю, сколько собеседований»
-      s.until.funnel = { on: true, apps: { know: 'approx', v: V({ exact: 10, usual: 10, min: 5, max: 15 }) }, invite: 30, ok: 70 };
       return s;
     } },
-    { id: 'sell', re: /(прода[мтжю]|продам|покупател|сдам\s+квартир|сдать\s+квартир|арендатор)/, say: 'вы что-то продаёте. Посчитаю, получится ли до срока', build: t => {
-      const s = blank('until');
-      s.title = /квартир/.test(t) ? 'Продать квартиру' : /машин|авто/.test(t) ? 'Продать машину' : 'Продать до срока';
-      s.until.attempts.v = V({ exact: 2, usual: 2, min: 0, max: 4 });
-      s.until.pct = 10;
-      s.until.deadline = dlFor(t, 'неделя', DL());
-      s.until.words = { one: 'показ', few: 'показа', many: 'показов', succ: 'сделка', succFew: 'сделки', succMany: 'сделок',
-        succIns: 'сделкой', act: 'продадите', inf: 'продать', hint: 'Не знаете? Часто сделка случается примерно после 10 показов — это 1 из 10 (очень примерно).' };
-      return s;
-    } },
-    { id: 'admission', re: /(поступ)/, say: 'вы поступаете. Посчитаю шанс поступить хотя бы куда-то', build: t => {
-      const s = blank('tries');
-      s.title = 'Поступить';
-      const n = parseAmount(t, '(вуз|универ|институт|заявлен)');
-      const w = wordNum(t);
-      s.tries = { what: 'вуз', n: Number.isFinite(n) ? n : Number.isFinite(w) ? w : 5, pct: 30, need: 1, act: 'поступите',
-        hint: 'Шанс в один вуз: если ваш балл около проходного прошлого года — примерно 3–5 из 10 (очень примерно).' };
-      return s;
-    } },
-    { id: 'exam', re: /(экзамен|сдам|сдать|сесси|зач[её]т|егэ|огэ|на права|сдачи)/, say: 'вы сдаёте экзамен. Посчитаю шанс сдать', build: t => {
-      const s = blank('tries');
-      s.title = /прав/.test(t) ? 'Сдать на права' : 'Сдать экзамен';
-      const n = parseAmount(t, 'попыт'), w = wordNum(t);
-      s.tries = { what: 'попытка сдачи', n: Number.isFinite(n) ? n : Number.isFinite(w) ? w : 3, pct: 60, need: 1, act: 'сдадите',
-        hint: 'Не знаете? Подумайте, сколько раз из 10 вы сдали бы его сегодня. Хорошо подготовленные — 8–9 из 10.' };
-      return s;
-    } },
-    { id: 'weight', re: /(похуд|сбросить|скинуть|\sвес[ауе]?\s|лишн)/, say: 'вы худеете. Посчитаю, когда дойдёте до цели', build: t => {
-      const s = blank('goal');
-      const target = parseAmount(t, 'кг');
-      s.title = Number.isFinite(target) ? `Похудеть до ${num(target)} кг` : 'Похудеть';
-      s.unit = 'кг';
-      s.goal = { start: Number.isFinite(target) ? target + 10 : 90, target: Number.isFinite(target) ? target : 80, period: 'неделя',
-        step: { know: 'approx', v: V({ exact: 0.5, usual: 0.6, min: 0.2, max: 1.2 }) },
-        setback: { on: true, pct: 20, from: 0.3, to: 1.5 }, deadline: dlFor(t, 'неделя', DL({ on: false })),
-        hint: 'Не знаете темп? Безопасно — 0,5–1 кг в неделю. Впишите, сколько весите сейчас.' };
-      return s;
-    } },
-    { id: 'gym', re: /(жим|жать|пожм|присед|станов|подтян|отжим|тяга)/, say: 'вы тренируетесь. Посчитаю, когда дойдёте до цели', build: t => {
-      const s = blank('goal');
-      const target = parseAmount(t, 'кг');
-      s.title = Number.isFinite(target) ? `Пожать ${num(target)} кг` : 'Новый рекорд';
-      s.unit = 'кг';
-      s.goal = { start: Number.isFinite(target) ? Math.round(target * 0.8) : 80, target: Number.isFinite(target) ? target : 100, period: 'неделя',
-        step: { know: 'approx', v: V({ exact: 0.5, usual: 0.5, min: 0, max: 1.5 }) },
-        setback: { on: true, pct: 20, from: 0, to: 1 }, deadline: dlFor(t, 'неделя', DL({ on: false })),
-        hint: 'Не знаете темп? У любителей обычно +0,5–1 кг в неделю, у опытных медленнее. Впишите свой текущий результат.' };
-      return s;
-    } },
-    { id: 'savings', re: /(накоп|отлож|скоп|сэконом|на машину|на квартиру|первоначальн)/, say: 'вы копите. Посчитаю, когда накопите', build: t => {
-      const s = blank('goal');
-      const target = parseAmount(t, '(₽|руб|р(?=[\\s.,!?]|$)|\\$|тыс)');
-      s.title = Number.isFinite(target) ? `Накопить ${fmtVal(target, '₽')}` : 'Накопить';
-      s.unit = '₽';
-      s.goal = { start: 0, target: Number.isFinite(target) ? target : 150000, period: 'месяц',
-        step: { know: 'approx', v: V({ exact: 15000, usual: 15000, min: 8000, max: 20000 }) },
-        setback: { on: true, pct: 15, from: 0, to: 15000 }, deadline: dlFor(t, 'месяц', DL({ on: false })),
-        hint: 'Сколько обычно получается отложить за месяц. Плохой месяц — крупные непредвиденные траты.' };
-      return s;
-    } },
-    { id: 'learn', re: /(выуч|слов|прочит|книг|страниц|курс|урок)/, say: 'вы учитесь. Посчитаю, когда дойдёте до цели', build: t => {
-      const s = blank('goal');
-      const words = /слов/.test(t), target = parseAmount(t, words ? 'слов' : '(страниц|урок|глав)');
-      s.title = words ? `Выучить ${Number.isFinite(target) ? num(target) : 1000} слов` : 'Закончить учёбу';
-      s.unit = words ? 'слов' : 'стр.';
-      s.goal = { start: 0, target: Number.isFinite(target) ? target : (words ? 1000 : 300), period: 'день',
-        step: { know: 'approx', v: V({ exact: 20, usual: 20, min: 10, max: 30 }) },
-        setback: { on: true, pct: 30, from: 0, to: 0 }, deadline: dlFor(t, 'день', DL({ on: false })),
-        hint: 'Плохой день — когда вообще не занимаетесь: прогресс 0.' };
-      return s;
-    } },
-    { id: 'project', re: /(ремонт|проект|диплом|курсов|дедлайн|закончу|сделать|написать|допишу|сдать работу)/, say: 'у вас дело к сроку. Посчитаю, сколько займут этапы', build: t => {
-      const s = blank('parts');
-      s.title = /ремонт/.test(t) ? 'Ремонт к сроку' : /диплом/.test(t) ? 'Диплом к сроку' : 'Дело к сроку';
-      s.unit = 'дн.';
-      const dl = parseDeadline(t);
-      const left = !dl ? 30 : dl.mode === 'date' ? daysLeft(dl.date) : Math.round(dl.value * PERIODS[dl.unit || 'неделя'].days);
-      s.limit = { on: true, value: left > 0 ? left : 30 };
-      s.items = /ремонт/.test(t)
-        ? [item('Черновые работы', 'approx', { usual: 10, min: 7, max: 20 }), item('Ждать материалы', 'maybe', { pct: 40, from: 3, to: 10 }),
-          item('Чистовая отделка', 'approx', { usual: 14, min: 10, max: 25 })]
-        : [item('Подготовка', 'approx', { usual: 5, min: 3, max: 10 }), item('Основная работа', 'approx', { usual: 15, min: 10, max: 30 }),
-          item('Правки', 'approx', { usual: 5, min: 2, max: 12 })];
-      return s;
-    } },
-    { id: 'meeting', re: /(встреч|соберут|совещан|гост[иья]|все придут|опоздают)/, say: 'вы ждёте нескольких людей. Посчитаю, начнётся ли вовремя',
-      build: () => example('meeting') },
-    { id: 'money', re: /(хватит|денег|бюджет|потрач|стоит|расход|отпуск|поездк)/, say: 'вопрос про деньги. Посчитаю, хватит ли', build: t => {
-      const s = example('trip');
-      const lim = parseAmount(t, '(₽|руб|р(?=[\\s.,!?]|$)|\\$|на)');
-      if (Number.isFinite(lim)) s.limit.value = lim;
-      s.title = /отпуск|поездк|море/.test(t) ? 'Хватит ли на отпуск' : 'Хватит ли денег';
-      return s;
-    } },
-    { id: 'travel', re: /(успе|опозда|доед|добер|самол[её]т|поезд|рейс|аэропорт|вокзал|дорог)/, say: 'вопрос про время в пути. Посчитаю, успеете ли', build: t => {
-      const s = example('plane');
-      const h = parseAmount(t, 'час'), mm = parseAmount(t, 'мин');
-      if (Number.isFinite(h) || Number.isFinite(mm)) s.limit.value = (Number.isFinite(h) ? h * 60 : 0) + (Number.isFinite(mm) ? mm : 0);
-      else if (/два часа/.test(t)) s.limit.value = 120;
-      if (!/самол|аэропорт|рейс/.test(t)) s.title = 'Успею ли вовремя';
-      return s;
-    } },
+    { id: 'offer', label: 'Оффер после 8 собеседований', make: () => ({ ...blank('tries'), title: 'Оффер после собеседований', unit: '',
+      tries: { what: 'собеседование', n: 8, pct: 15, need: 1, act: 'получите оффер' } }) },
+    { id: 'exam', label: 'Сдать экзамен с 3 попыток', make: () => ({ ...blank('tries'), title: 'Сдать экзамен', unit: '',
+      tries: { what: 'попытка сдачи', n: 3, pct: 60, need: 1, act: 'сдадите',
+        hint: 'Не знаете? Подумайте, сколько раз из 10 вы сдали бы его сегодня. Хорошо подготовленные — 8–9 из 10.' } }) },
   ];
-
-  function detect(text) {
-    const t = ' ' + String(text).toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ') + ' ';
-    const topic = TOPICS.find(x => x.re.test(t));
-    if (!topic) return null;
-    const s = topic.build(t);
-    s.question = String(text).trim();
-    s.topic = topic.id;
-    s.say = topic.say;
-    return s;
-  }
-
-  const QUESTIONS = ['Найду ли работу до Нового года?', 'Успею ли на самолёт за 2 часа?', 'Хватит ли 70 000 ₽ на отпуск?',
-    'Когда пожму 100 кг?', 'Похудею ли до 80 кг к лету?', 'Накоплю ли 150 000 ₽ за год?', 'Сдам ли экзамен с трёх попыток?',
-    'Выучу ли 1000 слов к сентябрю?', 'Продам ли квартиру до весны?', 'Успею ли сделать ремонт к 1 марта?'];
-
-  // Готовые ситуации (ссылки #simple=<id>; темы «встреча», «деньги», «дорога» строятся из них)
-  const EXAMPLES = [
-    { id: 'plane', sit: { v: 3, scheme: 'parts', title: 'Успеть на самолёт', unit: 'мин',
-      limit: { on: true, value: 120 }, cause: { on: false, name: 'Дождь', pct: 30 }, items: [
-        item('Подача такси', 'approx', { usual: 5, min: 2, max: 15 }), item('Дорога до аэропорта', 'approx', { usual: 40, min: 30, max: 70 }),
-        item('Пробка', 'maybe', { pct: 30, from: 10, to: 30 }), item('Регистрация и досмотр', 'approx', { usual: 20, min: 10, max: 50 }),
-        item('Дойти до выхода на посадку', 'exact', { exact: 10 })] } },
-    { id: 'meeting', sit: { v: 3, scheme: 'all', title: 'Встреча в 14:00', unit: 'мин',
-      limit: { on: true, value: 5 }, cause: { on: false, name: 'Дождь', pct: 30 }, items: [
-        item('Иван, едет на автобусе', 'history', { history: [0, 0, 5, 0, 10, 0, 5, 20, 0, 5] }),
-        item('Мария, задерживается после обеда', 'maybe', { pct: 10, from: 10, to: 10 }),
-        item('Переговорка: прошлое совещание затянулось', 'maybe', { pct: 25, from: 5, to: 15 })] } },
-    { id: 'trip', sit: { v: 3, scheme: 'parts', title: 'Поездка на море', unit: '₽',
-      limit: { on: true, value: 70000 }, cause: { on: false, name: 'Сезон', pct: 30 }, items: [
-        item('Билеты', 'exact', { exact: 18000 }), item('Жильё', 'approx', { usual: 20000, min: 16000, max: 26000 }),
-        item('Еда', 'approx', { usual: 12000, min: 9000, max: 18000 }), item('Экскурсии и развлечения', 'approx', { usual: 8000, min: 4000, max: 15000 }),
-        item('Непредвиденное', 'maybe', { pct: 30, from: 3000, to: 10000 })] } },
-    { id: 'offer', sit: { v: 3, scheme: 'tries', title: 'Оффер после собеседований', unit: '', limit: { on: false, value: 0 },
-      cause: { on: false, name: '', pct: 0 }, tries: { what: 'собеседование', n: 8, pct: 15, need: 1, act: 'получите оффер' } } },
-    { id: 'bench', q: 'Когда пожму 100 кг?', patch: s => { s.goal.start = 80; s.goal.deadline = DL({ mode: 'n', value: 52 }); } },
-    { id: 'weight', q: 'Похудею ли до 80 кг?', patch: s => { s.goal.start = 92; s.goal.deadline = DL({ mode: 'n', value: 40 }); } },
-    { id: 'savings', q: 'Накоплю ли 150 000 ₽ за год?', patch: s => { s.goal.start = 20000; } },
-    { id: 'job', q: 'Найду ли работу до Нового года?' },
-  ];
+  /** Пример по ссылке: особый расчёт или пример конструктора (старые ссылки #simple=plane и т. п. тоже работают). */
   function example(id) {
-    const x = EXAMPLES.find(e => e.id === id);
-    if (!x) return null;
-    if (x.sit) return clone(x.sit);
-    const s = detect(x.q);
-    if (x.patch) x.patch(s);
-    return s;
+    const x = EXAMPLES_S.find(e => e.id === id) || EXAMPLES_B.find(e => e.id === id);
+    return x ? x.make() : null;
   }
 
   // ===================================================================================
@@ -362,11 +180,25 @@ const PASimple = (() => {
     tryStore(() => localStorage.setItem(KEY_CUR, JSON.stringify(calc)));
     renderMyCount();
   }
-  /** Старые сохранения: срок числом -> новый формат. */
+  /** Старые сохранения: «части складываются» / «ждём всех» -> конструктор; срок числом -> новый формат. */
   function upgrade(s) {
+    if (s && (s.scheme === 'parts' || s.scheme === 'all') && Array.isArray(s.items)) return legacyToBuild(s);
+    if (s && s.until && s.until.funnel) delete s.until.funnel;   // цепочки «отклики → оффер» больше нет
     if (s && s.goal && s.goal.deadline && !s.goal.deadline.mode) s.goal.deadline = DL({ on: s.goal.deadline.on, mode: 'n', value: s.goal.deadline.value });
     if (s && s.tries && !s.tries.act) s.tries.act = 'получится';
     return s;
+  }
+
+  /** Расчёт старого вида (пункты + порог) -> такой же расчёт в конструкторе. */
+  function legacyToBuild(o) {
+    const cause = o.cause && o.cause.on;
+    const factors = o.items.map((it, k) => bFactor(`f${k + 1}`, it.name || `Пункт ${k + 1}`, o.unit || '', it.know, it.v,
+      cause && it.byCause && it.vc ? { depOn: true, depCause: 'fc', vc: V(it.vc) } : {}));
+    if (cause) factors.unshift(bFactor('fc', o.cause.name || 'Общая причина', '', 'yesno', { pct: o.cause.pct }));
+    const all = o.scheme === 'all';
+    return { v: 4, scheme: 'build', title: o.title || '', factors,
+      steps: [bStep('s1', all ? 'Когда готово всё' : 'Всего', all ? 'max' : 'sum', { args: o.items.map((_, k) => `f${k + 1}`) })],
+      result: 's1', success: { on: !!(o.limit && o.limit.on), ref: 's1', cmp: '<=', value: o.limit ? o.limit.value : 0 } };
   }
 
   // ===================================================================================
@@ -417,18 +249,7 @@ const PASimple = (() => {
   function check(s) {
     if (s.scheme === 'build') return checkBuild(s);
     const items = {}, global = [];
-    if (s.scheme === 'parts' || s.scheme === 'all') {
-      if (!s.items.length) global.push('Добавьте хотя бы одну часть.');
-      s.items.forEach((it, k) => {
-        const nm = it.name || `Пункт ${k + 1}`;
-        const m1 = checkValue(it.know, it.v);
-        const m2 = s.cause.on && it.byCause && it.vc ? checkValue(it.know, it.vc) : '';
-        if (m1) items[k] = `«${nm}»: ${m1}.`;
-        else if (m2) items[k] = `«${nm}», когда «${s.cause.name}»: ${m2}.`;
-      });
-      if (s.limit.on && bad(s.limit.value)) global.push('Впишите число в вопросе внизу (или снимите галочку).');
-      if (s.cause.on && !(s.cause.pct >= 0 && s.cause.pct <= 100)) global.push('Общая причина: как часто — от 0 до 100 %.');
-    } else if (s.scheme === 'goal') {
+    if (s.scheme === 'goal') {
       const g = s.goal;
       if (bad(g.start) || bad(g.target)) global.push('Впишите, где вы сейчас и какая цель.');
       const m = checkValue(g.step.know, g.step.v);
@@ -444,8 +265,6 @@ const PASimple = (() => {
       const m = checkValue(a.know, a.v);
       if (m) items.attempts = `Сколько ${untilWords(u).many} за ${PERIODS[u.period].acc}: ${m}.`;
       if (!(u.pct >= 0 && u.pct <= 100)) global.push('Шанс — от 0 до 100 %.');
-      if (funnelOn(u) && !(u.funnel.invite >= 0 && u.funnel.invite <= 100 && u.funnel.ok >= 0 && u.funnel.ok <= 100))
-        global.push('Доли «зовут на собеседование» и «оффер подходит» — от 0 до 100 %.');
       if (!(Number.isInteger(u.need) && u.need >= 1)) global.push('Сколько нужно — целое число, хотя бы 1.');
       const d = checkDeadline(u.deadline, u.period, true);
       if (d) global.push(d);
@@ -485,16 +304,13 @@ const PASimple = (() => {
     return (1 - q) * d.mean - q * (g.setback.from + g.setback.to) / 2;
   }
   const meanOf = (know, v) => MC.prepareDist(distOf(know, v), 'x').mean;
-  // «Получится ли до срока» с цепочкой «отклики → собеседование → оффер → подходит» (тема «работа»)
-  const funnelOn = u => !!(u && u.funnel && u.funnel.on);
-  const untilAttempts = u => (funnelOn(u) ? u.funnel.apps : u.attempts);
-  const untilP = u => (funnelOn(u) ? (u.funnel.invite / 100) * (u.pct / 100) * (u.funnel.ok / 100) : u.pct / 100);
-  const untilWords = u => (funnelOn(u) ? { one: 'отклик', few: 'отклика', many: 'откликов' } : u.words);
+  // «Получится ли до срока»: попыток за период, шанс одной попытки, слова темы
+  const untilAttempts = u => u.attempts;
+  const untilP = u => u.pct / 100;
+  const untilWords = u => u.words;
 
   function toScenario(s) {
     if (s.scheme === 'build') return buildToScenario(s);
-    const taken = new Set(['итог', 'успех']);
-    const id = (raw, fb) => CSV.safeName(raw || fb, taken);
     if (s.scheme === 'goal') {
       const g = s.goal, sign = g.target >= g.start ? 1 : -1, P = PERIODS[g.period];
       const signed = d => (sign === 1 ? d : negate(d));
@@ -511,7 +327,6 @@ const PASimple = (() => {
       const u = s.until, P = PERIODS[u.period], W = deadlinePeriods(u.deadline, u.period);
       return { name: s.title || 'До срока', description: 'Собрано в простом режиме: получится ли до срока.',
         factors: [{ name: 'Периоды', label: `Сколько ${P.forms[2]} уйдёт`,
-          // с цепочкой каждый отклик сам по себе ведёт к подходящему офферу с шансом «зовут × оффер × подходит»
           dist: { type: 'walk', start: 0, goal: u.need, maxSteps: P.max, step: { type: 'repeat',
             timesDist: distOf(untilAttempts(u).know, untilAttempts(u).v), dist: { type: 'yesno', p: untilP(u) } } } }],
         derived: [], result: { name: 'Итог', label: `Сколько ${P.forms[2]} уйдёт`, unit: P.forms[2], formula: 'Периоды' },
@@ -524,25 +339,7 @@ const PASimple = (() => {
         derived: [], result: { name: 'Итог', label: 'Сколько удачных', unit: 'шт.', formula: 'Удачные' },
         event: { name: 'Успех', label: `Хотя бы ${t.need} удачных`, formula: `Итог >= ${t.need}` } };
     }
-    const factors = [], parts = [];
-    let causeId = null;
-    if (s.cause.on) {
-      causeId = id(s.cause.name, 'Причина');
-      factors.push({ name: causeId, label: `${s.cause.name || 'Общая причина'}?`, dist: { type: 'yesno', p: s.cause.pct / 100 } });
-    }
-    s.items.forEach((it, k) => {
-      const name = id(it.name, `Пункт_${k + 1}`);
-      const dist = causeId && it.byCause && it.vc
-        ? { type: 'conditional', on: causeId, cases: [{ value: 1, dist: distOf(it.know, it.vc) }, { value: 0, dist: distOf(it.know, it.v) }] }
-        : distOf(it.know, it.v);
-      factors.push({ name, label: `${it.name || `Пункт ${k + 1}`}, ${s.unit}`, dist });
-      parts.push(name);
-    });
-    return { name: s.title || 'Моя ситуация', description: `Собрано в простом режиме: ${SCHEMES[s.scheme].title.toLowerCase()}`,
-      factors, derived: [],
-      result: { name: 'Итог', label: s.scheme === 'all' ? 'Когда готово всё' : 'Сколько всего', unit: s.unit,
-        formula: s.scheme === 'all' ? `max(${parts.join('; ')})` : parts.join(' + ') },
-      event: s.limit.on ? { name: 'Успех', label: `Не больше ${fmtVal(s.limit.value, s.unit)}`, formula: `Итог <= ${s.limit.value}` } : null };
+    throw new Error(`Неизвестный вид расчёта: ${s.scheme}`);
   }
 
   // ===================================================================================
@@ -572,9 +369,14 @@ const PASimple = (() => {
     if (know === 'yesno') return `<div class="maybe"><span>Бывает «да»</span> ${chanceCtl(`${P}.pct`, v.pct)}</div>
       <p class="hint">В расчётах «да» — это 1, «нет» — 0.</p>`;
     if (know === 'table') return tableEditor(v, P, unit);
-    const cnt = v.history.filter(Number.isFinite).length;
-    return `<textarea rows="2" class="mono" data-s="${P}.history" data-list placeholder="Например: 35 42 38 60 41" aria-label="Прошлые значения">${esc(v.history.map(fmtIn).join(' '))}</textarea>
-      <p class="hint" data-hist="${P}">${histHint(cnt)}</p>`;
+    const cnt = v.history.filter(Number.isFinite).length, cs = csvState[P];
+    return `<textarea rows="2" class="mono" data-s="${P}.history" data-list placeholder="Например: 35 42 38 60 41 — или перетащите сюда CSV-файл" aria-label="Прошлые значения">${esc(v.history.map(fmtIn).join(' '))}</textarea>
+      <p class="hint" data-hist="${P}">${histHint(cnt)}</p>
+      <div class="csv-row"><button type="button" class="btn small" data-s-act="csv" data-p="${P}">📂 Загрузить из файла</button>
+        <span class="hint">CSV из Excel или таблицы: «Файл → Сохранить как → CSV»</span></div>
+      ${cs && cs.cols ? `<div class="csv-pick"><span>В файле «${esc(cs.file)}» несколько столбцов с числами. Какой взять?</span>
+        <div class="chips">${cs.cols.map((c, j) => `<button type="button" class="chip" data-s-act="csv-col" data-p="${P}" data-j="${j}">${esc(c.name)} <small>(${c.values.length})</small></button>`).join('')}</div></div>` : ''}
+      ${cs && cs.msg ? `<p class="hint csv-msg${cs.bad ? ' bad' : ''}">${esc(cs.msg)}</p>` : ''}`;
   }
 
   function knowSeg(P, know, allowed = KNOW.map(x => x[0]), list = KNOW) {
@@ -591,31 +393,6 @@ const PASimple = (() => {
     if (know === 'table') return v.rows.map(r => `${fmtVal(r.value, unit)} — ${num(r.pct)} %`).join(', ');
     if (know === 'maybe') return `бывает ${tenText(v.pct)}, тогда ${v.from === v.to ? fmtVal(v.from, unit) : `${fmtVal(v.from, unit)}–${fmtVal(v.to, unit)}`}`;
     return `как раньше: ${v.history.length} знач., обычно ${fmtVal(median(v.history), unit)}`;
-  }
-
-  function itemCard(it, k) {
-    const s = sit(), key = `${calc.active}.${k}`, P = `items.${k}`;
-    const head = `<div class="row">
-        <input class="s-name" data-s="${P}.name" value="${esc(it.name)}" placeholder="${esc(SCHEMES[s.scheme].ph)}" aria-label="Название">
-        <button class="icon" data-s-act="del" data-k="${k}" title="Убрать" aria-label="Убрать"${s.items.length < 2 ? ' disabled' : ''}>✕</button>
-      </div>`;
-    if (!open.has(key)) {
-      return `<div class="item s-item closed" data-k="${k}">${head}
-        <button type="button" class="s-sum" data-s-act="open" data-k="${k}"><span>${summaryOf(it.know, it.v, s.unit)}${
-          s.cause.on && it.byCause ? ` · когда «${esc(s.cause.name)}» — по-другому` : ''}</span><span class="edit">изменить</span></button>
-        <div class="s-err" data-err="${k}"></div></div>`;
-    }
-    return `<div class="item s-item" data-k="${k}">${head}
-      <div class="know-q">Что вы об этом знаете?</div>
-      ${knowSeg(P, it.know)}
-      ${valueEditor(it.know, it.v, `${P}.v`, s.unit)}
-      ${s.cause.on ? `<label class="check"><input type="checkbox" data-s="${P}.byCause"${it.byCause ? ' checked' : ''}>
-          Когда «${esc(s.cause.name)}» — по-другому</label>
-        ${it.byCause && it.vc ? `<div class="alt"><div class="alt-head">Когда «${esc(s.cause.name)}»:</div>
-          ${valueEditor(it.know, it.vc, `${P}.vc`, s.unit)}</div>` : ''}` : ''}
-      <div class="s-err" data-err="${k}"></div>
-      <button class="btn small done" data-s-act="close" data-k="${k}">Готово</button>
-    </div>`;
   }
 
   function unitSelect(path, unit) {
@@ -641,12 +418,6 @@ const PASimple = (() => {
     </div>`;
   }
 
-  function limitText(s) {
-    const k = unitKind(s.unit);
-    if (s.scheme === 'all') return 'Всё должно быть готово не позже чем через';
-    return k === 'time' ? 'Успею ли за' : k === 'money' ? 'Хватит ли' : 'Уложусь ли в';
-  }
-
   // Вопросы — одним компактным блоком; редкие настройки — под «Ещё настройки»
   const Q = (no, title, body) => `<div class="q"><div class="q-t">${no ? `<span class="step-num">${no}</span>` : ''}<span>${title}</span></div>
     <div class="q-c">${body}</div></div>`;
@@ -654,22 +425,6 @@ const PASimple = (() => {
   const titleField = s => `<label class="field grow">Название расчёта<input data-s="title" value="${esc(s.title)}"></label>`;
   const numIn = (path, value, label, cls = '') => `<input inputmode="decimal" class="${cls}" data-s="${path}" data-num value="${fmtIn(value)}" aria-label="${label}">`;
   const tip = text => (text ? `<p class="hint s-tip">💡 ${esc(text)}</p>` : '');
-
-  function formParts(s) {
-    const S = SCHEMES[s.scheme];
-    return `<div class="card s-form">
-      ${Q(1, S.itemsQ, `<div class="items">${s.items.map(itemCard).join('')}</div>
-        <button class="btn add" data-s-act="add">${S.add}</button>`)}
-      ${Q(2, 'Что вы хотите узнать?', `<label class="goal"><input type="checkbox" data-s="limit.on"${s.limit.on ? ' checked' : ''}> ${limitText(s)}
-          ${numIn('limit.value', s.limit.value, 'Порог')} ${unitSelect('unit', s.unit)}</label>
-        <p class="hint">${s.limit.on ? 'Посчитаю шанс и какой нужен запас.' : 'Без галочки — сколько скорее всего выйдет и какой нужен запас.'}</p>`)}
-      ${Q(3, 'Есть общая причина? <small>необязательно</small>', `<label class="check"><input type="checkbox" data-s="cause.on"${s.cause.on ? ' checked' : ''}>
-          Иногда бывает что-то, из-за чего хуже сразу нескольким частям (например, дождь)</label>
-        ${s.cause.on ? `<div class="row2"><label class="field grow">Что это<input data-s="cause.name" value="${esc(s.cause.name)}"></label></div>
-          <div class="maybe"><span>Бывает</span> ${chanceCtl('cause.pct', s.cause.pct)}</div>
-          <p class="hint">Теперь у каждой части можно отметить «Когда «${esc(s.cause.name)}» — по-другому».</p>` : ''}`)}
-    </div>${more(`<div class="row2">${titleField(s)}</div>`)}`;
-  }
 
   function formGoal(s) {
     const g = s.goal, P = PERIODS[g.period], up = g.target >= g.start;
@@ -690,32 +445,15 @@ const PASimple = (() => {
   }
 
   function formUntil(s) {
-    const u = s.until, P = PERIODS[u.period], w = u.words, f = funnelOn(u);
+    const u = s.until, P = PERIODS[u.period], w = u.words;
     let no = 1;
     const parts = [Q(no++, 'До какого срока?', deadlineCtl('until.deadline', u.deadline, u.period, false))];
-    if (f) {
-      parts.push(Q(no++, `Сколько откликов вы отправляете за ${P.acc}?`, `
-        ${knowSeg('until.funnel.apps', u.funnel.apps.know, ['exact', 'approx', 'history'])}
-        ${valueEditor(u.funnel.apps.know, u.funnel.apps.v, 'until.funnel.apps.v', '')}
-        <div class="s-err" data-err="attempts"></div>
-        <label class="check small-check"><input type="checkbox" data-s="until.funnel.on" checked> Считать от откликов
-          <span class="muted">(снимите, если знаете, сколько у вас собеседований)</span></label>`));
-      parts.push(Q(no++, 'Из 10 откликов на сколько зовут на собеседование?', `
-        <div class="maybe"><span>Зовут</span> ${chanceCtl('until.funnel.invite', u.funnel.invite)}</div>
-        ${tip('Не знаете? Сколько было приглашений на ваши последние отклики. Часто 1–3 из 10 (очень примерно).')}`));
-    } else {
-      parts.push(Q(no++, `Сколько ${w.many} бывает за ${P.acc}?`, `
-        ${knowSeg('until.attempts', u.attempts.know, ['exact', 'approx', 'history'])}
-        ${valueEditor(u.attempts.know, u.attempts.v, 'until.attempts.v', '')}
-        <div class="s-err" data-err="attempts"></div>
-        ${u.funnel ? `<label class="check small-check"><input type="checkbox" data-s="until.funnel.on"> Считать от откликов
-          <span class="muted">(если проще сказать, сколько вакансий вы откликаетесь)</span></label>` : ''}`));
-    }
+    parts.push(Q(no++, `Сколько ${w.many} бывает за ${P.acc}?`, `
+      ${knowSeg('until.attempts', u.attempts.know, ['exact', 'approx', 'history'])}
+      ${valueEditor(u.attempts.know, u.attempts.v, 'until.attempts.v', '')}
+      <div class="s-err" data-err="attempts"></div>`));
     parts.push(Q(no++, `Как часто ${w.one} заканчивается ${w.succIns || 'успехом'}?`, `
       <div class="maybe"><span>Получается</span> ${chanceCtl('until.pct', u.pct)}</div>${tip(w.hint)}`));
-    if (f) parts.push(Q(no++, 'Из 10 офферов сколько вам подойдут?', `
-      <div class="maybe"><span>Подходят</span> ${chanceCtl('until.funnel.ok', u.funnel.ok)}</div>
-      ${tip('Оффер — ещё не работа: зарплата или условия могут не устроить. Если согласитесь на любой — 10 из 10.')}`));
     return `<div class="card s-form">${parts.join('')}</div>${more(`<div class="row2">${titleField(s)}
       <label class="field">считаем по${periodSelect('until.period', u.period)}</label>
       <label class="field">сколько нужно (${esc(w.succMany)})${numIn('until.need', u.need, 'Сколько нужно')}</label></div>`)}`;
@@ -970,13 +708,24 @@ const PASimple = (() => {
         <div class="inline">то ${operandCtl(`${P}.a`, x.a, avail, s)}</div><div class="inline">иначе ${operandCtl(`${P}.b`, x.b, avail, s)}</div>`;
     } else body = `<input class="mono formula-in" data-s="${P}.formula" value="${esc(x.formula)}" placeholder="например: max(A; B) + 5" aria-label="Формула">
       <div class="chips">${avail.map(id => `<button type="button" class="chip" data-s-act="b-ins" data-k="${k}" data-name="${esc(nm[id])}">${esc(nm[id])}</button>`).join('')}</div>
-      <p class="hint">Нажмите на имя, чтобы вставить его. Можно: + − * / ^, max( ; ), min( ; ), если(условие; да; нет), сравнения &lt;= &gt;=.</p>`;
+      <p class="hint">Нажмите на имя, чтобы вставить его.</p>${formulaHelp(avail.map(id => nm[id]))}`;
     return `<div class="item s-item step">
       <div class="row"><input class="s-name" data-s="${P}.name" value="${esc(x.name)}" placeholder="Например: задержка совещания" aria-label="Название расчёта">
         <span class="eq">=</span>
         <select data-s="${P}.op" aria-label="Как считать">${Object.entries(OPS).map(([o, l]) => `<option value="${o}"${o === x.op ? ' selected' : ''}>${l}</option>`).join('')}</select>
         <button class="icon" data-s-act="b-del-s" data-k="${k}" title="Убрать расчёт" aria-label="Убрать расчёт">✕</button></div>
       ${body}<div class="s-err" data-err="s${k}"></div></div>`;
+  }
+
+  /** Подсказка к своей формуле: правила и примеры с именами из этого расчёта. */
+  function formulaHelp(names) {
+    const a = names[0] || 'А', b = names[1] || 'Б';
+    const ex = [[`${a} + ${b}`, 'сумма'], [`max(${a}; ${b})`, 'самое большое (min — самое маленькое)'], [`${a} * 1.5`, 'в полтора раза больше (дробь — через точку)'],
+      [`max(${a} - 10; 0)`, 'на 10 меньше, но не меньше нуля'], [`если(${a} > 15; ${b}; 0)`, 'если … то … иначе …'],
+      [`если(${a} = 1 и ${b} > 5; 1; 0)`, '«да / нет» — это 1 и 0; можно «и», «или», «не»'], [`round(${a} / 60)`, 'округлить (ещё: abs, floor, ceil, sqrt)']];
+    return `<details class="f-help"><summary>Примеры формул</summary><ul class="f-ex">${ex.map(([f, t]) =>
+      `<li><code>${esc(f)}</code> — ${t}</li>`).join('')}</ul>
+      <p class="hint">Действия: + − * / ^ и скобки. Сравнения: &lt; &lt;= &gt; &gt;= = &lt;&gt; (верно — 1, неверно — 0). Аргументы — через «;».</p></details>`;
   }
 
   function formBuild(s) {
@@ -1065,6 +814,8 @@ const PASimple = (() => {
         <p class="sub">Для ситуаций «во времени», которые неудобно собирать из блоков:</p>
         <div class="schemes">${['goal', 'until', 'tries'].map(k => { const v = SCHEMES[k]; return `<button class="scheme" data-s-act="scheme" data-scheme="${k}">
           <span class="sc-icon" aria-hidden="true">${v.icon}</span><b>${v.title}</b><small>${v.sub}</small><em>${v.ex}</em></button>`; }).join('')}</div>
+        <p class="sub" style="margin-top:12px">Примеры:</p>
+        <div class="chips">${EXAMPLES_S.map(x => `<button class="chip" data-s-act="example-s" data-id="${x.id}">${esc(x.label)}</button>`).join('')}</div>
       </div>`;
     $('#s-results').innerHTML = `<section class="card s-empty"><h3>Здесь будет ответ</h3>
       <p class="sub">Начните с нуля или откройте пример. Ответ появится сразу и будет обновляться, пока вы меняете цифры.</p></section>`;
@@ -1092,11 +843,9 @@ const PASimple = (() => {
       showErrors(check(s)); updateSums();
       return;
     }
-    const head = `<div class="s-scheme">${s.question
-      ? `<span class="s-said">«${esc(s.question)}»</span> <span class="s-say">— похоже, ${esc(s.say || 'это можно посчитать так')}.</span>`
-      : `<span>${SCHEMES[s.scheme].icon} ${SCHEMES[s.scheme].title}</span>`}
-      <button class="link" data-s-act="change-scheme">${s.question ? 'не то?' : 'сменить'}</button></div>`;
-    const form = s.scheme === 'goal' ? formGoal(s) : s.scheme === 'until' ? formUntil(s) : s.scheme === 'tries' ? formTries(s) : formParts(s);
+    const head = `<div class="s-scheme"><span>${SCHEMES[s.scheme].icon} ${SCHEMES[s.scheme].title}</span>
+      <button class="link" data-s-act="to-start">все примеры и новый расчёт</button></div>`;
+    const form = s.scheme === 'goal' ? formGoal(s) : s.scheme === 'until' ? formUntil(s) : formTries(s);
     $('#s-editor').innerHTML = head + form;
     showErrors(check(s));
   }
@@ -1107,7 +856,6 @@ const PASimple = (() => {
   // ===================================================================================
   function bind() {
     const ed = $('#s-editor');
-    const skip = el => el.id === 's-q';
     const onValue = (e, final) => {
       const el = e.target, p = el.dataset.s;
       if (!p) return;
@@ -1137,8 +885,7 @@ const PASimple = (() => {
         if (yes && c.cmp !== 'yes' && c.cmp !== 'no') c.cmp = 'yes';
         if (!yes && (c.cmp === 'yes' || c.cmp === 'no')) { c.cmp = '>'; if (bad(c.value)) c.value = 0; }
       }
-      if (/\.byCause$/.test(p) && v) { const it = getPath(sit(), p.replace(/\.byCause$/, '')); if (!it.vc) it.vc = clone(it.v); }
-      const structural = el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date' || (final && (p === 'cause.name' || /^factors\.\d+\.unit$/.test(p)));
+      const structural = el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date' || (final && /^factors\.\d+\.unit$/.test(p));
       if (structural) render();
       else {
         const h = el.hasAttribute('data-list') && $(`[data-hist="${p.replace(/\.history$/, '')}"]`);
@@ -1157,19 +904,18 @@ const PASimple = (() => {
     };
     ed.addEventListener('input', e => {
       const el = e.target;
-      if (skip(el) || el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date') return;
+      if (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date') return;
       onValue(e, false);
     });
     ed.addEventListener('change', e => {
       const el = e.target;
-      if (skip(el)) return;
       if (el.dataset.op) {   // операнд блока: величина или «число…»
         const v = el.value;
         setPath(sit(), el.dataset.op, v === '#num' ? { num: 0 } : v ? { ref: v } : null);
         render(); changed();
         return;
       }
-      if (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date' || el.dataset.s === 'cause.name'
+      if (el.type === 'checkbox' || el.tagName === 'SELECT' || el.type === 'date'
         || /^factors\.\d+\.unit$/.test(el.dataset.s || '')) onValue(e, true);
       else if (el.hasAttribute('data-num')) { const v = getPath(sit(), el.dataset.s); if (Number.isFinite(v)) el.value = fmtIn(v); }
     });
@@ -1178,10 +924,43 @@ const PASimple = (() => {
       if (!b || !b.closest('#simple-view')) return;
       act(b.dataset.sAct, b);
     });
+    // загрузка CSV в «по данным»: кнопка или перетаскивание файла на поле со значениями
+    const fi = document.createElement('input');
+    Object.assign(fi, { type: 'file', id: 's-csv-file', accept: '.csv,.txt,text/csv,text/plain', hidden: true });
+    $('#simple-view').appendChild(fi);
+    fi.addEventListener('change', () => { if (fi.files[0] && csvTarget) loadCsv(fi.files[0], csvTarget); fi.value = ''; });
+    ed.addEventListener('dragover', e => { if (e.target.matches && e.target.matches('textarea[data-list]')) e.preventDefault(); });
+    ed.addEventListener('drop', e => {
+      if (!(e.target.matches && e.target.matches('textarea[data-list]')) || !e.dataTransfer.files.length) return;
+      e.preventDefault();
+      loadCsv(e.dataTransfer.files[0], e.target.dataset.s.replace(/\.history$/, ''));
+    });
     $('#s-new').addEventListener('click', newCalc);
     $('#s-my').addEventListener('click', toggleMy);
     $('#s-share').addEventListener('click', share);
     $('#s-sticky').addEventListener('click', () => $('#s-results').scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
+  // ---------------------------------------------------------------- CSV -> «по данным»
+  let csvTarget = null;
+  const csvState = {};   // путь значения -> { file, cols?, msg?, bad? }
+  async function loadCsv(file, P) {
+    const done = st => { csvState[P] = st; render(); };
+    if (/\.xlsx?$/i.test(file.name)) { done({ msg: 'Это файл Excel. Сохраните его в Excel как «CSV (разделители — точки с запятой)» и загрузите снова.', bad: true }); return; }
+    const buf = await file.arrayBuffer();
+    let text;
+    try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf); } catch (e) { text = new TextDecoder('windows-1251').decode(buf); }
+    const cols = CSV.parse(text).columns.filter(c => c.values.length && c.skipped <= c.values.length / 10);
+    if (!cols.length) { done({ msg: `В файле «${file.name}» не нашлось столбца с числами.`, bad: true }); return; }
+    if (cols.length === 1) { useCsvCol(P, file.name, cols[0]); return; }
+    done({ file: file.name, cols });
+  }
+  function useCsvCol(P, file, col) {
+    const v = getPath(sit(), P);
+    if (!v) return;
+    v.history = col.values.slice();
+    csvState[P] = { msg: `Загружено ${col.values.length} ${plural(col.values.length, ['значение', 'значения', 'значений'])} из «${file}»${col.name ? `, столбец «${col.name}»` : ''}.` };
+    render(); changed();
   }
 
   function syncTen(p, v) {
@@ -1202,6 +981,15 @@ const PASimple = (() => {
     }
     if (a === 'to-start') { newCalc(); return; }
     if (a === 'pdf') { printReport(); return; }
+    if (a === 'csv') { csvTarget = b.dataset.p; $('#s-csv-file').click(); return; }
+    if (a === 'csv-col') { const cs = csvState[b.dataset.p]; if (cs && cs.cols) useCsvCol(b.dataset.p, cs.file, cs.cols[+b.dataset.j]); return; }
+    if (a === 'example-s') {
+      const x = EXAMPLES_S.find(e => e.id === b.dataset.id);
+      if (!x) return;
+      calc = calcOf(x.make()); open.clear(); last = null;
+      render(); run();
+      return;
+    }
     if (a === 'blank-b') { calc.variants[calc.active] = blankB(); open.clear(); open.add(`${calc.active}.f0`); last = null; }
     else if (a === 'b-add-f') {
       const lastF = s.factors[s.factors.length - 1];
@@ -1237,19 +1025,7 @@ const PASimple = (() => {
       const v = getPath(s, b.dataset.p), lr = v.rows[v.rows.length - 1];
       v.rows.push({ value: lr && Number.isFinite(lr.value) ? lr.value + 10 : 0, pct: 0 });
     } else if (a === 'b-del-row') getPath(s, b.dataset.p).rows.splice(+b.dataset.j, 1);
-    else if (a === 'scheme') { calc.variants[calc.active] = blank(b.dataset.scheme); open.clear(); open.add(`${calc.active}.0`); }
-    else if (a === 'change-scheme') {
-      if (!s.question && !confirm('Сменить тип ситуации? Введённые цифры пропадут.')) return;
-      calc.variants[calc.active] = { scheme: null }; last = null;
-    } else if (a === 'add') {
-      s.items.push(item('', 'approx', unitKind(s.unit) === 'money' ? { usual: 1000, min: 500, max: 2000 } : { usual: 10, min: 5, max: 20 }));
-      open.add(`${calc.active}.${s.items.length - 1}`);
-      render(); changed();
-      const names = $$('.s-name'); names[names.length - 1].focus();
-      return;
-    } else if (a === 'del') { s.items.splice(k, 1); open.clear(); }
-    else if (a === 'open') open.add(`${calc.active}.${k}`);
-    else if (a === 'close') { if (check(s).items[k]) return; open.delete(`${calc.active}.${k}`); render(); return; }
+    else if (a === 'scheme') { calc.variants[calc.active] = blank(b.dataset.scheme); open.clear(); }
     else if (a === 'know') { const o = getPath(s, b.dataset.p); o.know = b.dataset.know; if (o.know === 'yesno' && 'depOn' in o) o.depOn = false; }
     else if (a === 'ten') {
       // как звёздочки-оценки: повторный щелчок по единственному закрашенному кружку -> 0 из 10 («никогда»)
@@ -1367,36 +1143,11 @@ const PASimple = (() => {
           one(`всегда ${fmtVal(top.value, u)} (самый частый вариант)`, x => { const t2 = x.rows.reduce((a, r) => (r.pct > a.pct ? r : a), x.rows[0]); x.rows = [{ value: t2.value, pct: 100 }]; });
         } else if (f.know === 'history' && v.history.length) one(`всегда как обычно (${fmtVal(median(v.history), u)})`, x => { x.history = [median(x.history)]; });
       });
-    } else if (s.scheme === 'parts' || s.scheme === 'all') {
-      s.items.forEach((it, k) => {
-        if (it.know === 'exact') return;
-        const t = clone(s), x = t.items[k], nm = it.name || `Пункт ${k + 1}`;
-        const fix = v => {
-          if (it.know === 'approx') { v.min = v.max = v.usual; return `всегда как обычно — ${fmtVal(v.usual, s.unit)}`; }
-          if (it.know === 'maybe') { v.pct = 0; return 'такого не случается'; }
-          const m = median(v.history); v.history = [m]; return `всегда как обычно — ${fmtVal(m, s.unit)}`;
-        };
-        const what = fix(x.v);
-        if (x.byCause && x.vc) fix(x.vc);
-        out.push({ name: nm, what, s: t });
-      });
-      if (s.cause.on) { const t = clone(s); t.cause.pct = 0; out.push({ name: s.cause.name, what: 'этого не бывает', s: t }); }
     } else if (s.scheme === 'goal') {
       const g = s.goal, P = PERIODS[g.period];
       if (g.setback.on && g.setback.pct > 0) { const t = clone(s); t.goal.setback.pct = 0; out.push({ name: `Без плохих ${P.forms[2]}`, what: 'ни пропусков, ни откатов', s: t }); }
       const t = clone(s); bump(t.goal.step, { mul: 1.2 });
       out.push({ name: 'Темп на 20 % быстрее', what: `за ${P.acc} на пятую часть больше`, s: t });
-    } else if (s.scheme === 'until' && funnelOn(s.until)) {
-      // цепочка: какое звено слабее всего — отклики, приглашения, собеседования, условия
-      const u = s.until, f = u.funnel, P = PERIODS[u.period];
-      const t1 = clone(s); bump(t1.until.funnel.apps, { add: 5 });
-      out.push({ name: `+5 откликов в ${P.acc}`, what: 'больше откликов', s: t1 });
-      if (f.invite <= 90) { const t2 = clone(s); t2.until.funnel.invite = f.invite + 10; out.push({ name: 'Зовут чаще', what: `на 1 из 10 (${tenText(f.invite + 10)}) — сильнее резюме и сопроводительные`, s: t2 }); }
-      if (u.pct <= 90) { const t3 = clone(s); t3.until.pct = u.pct + 10; out.push({ name: 'Собеседования удачнее', what: `оффер на 1 из 10 чаще (${tenText(u.pct + 10)}) — лучше подготовиться`, s: t3 }); }
-      if (f.ok < 100) { const t4 = clone(s); t4.until.funnel.ok = 100; out.push({ name: 'Согласиться на любой оффер', what: 'не отказываться из-за условий', s: t4 }); }
-      const t5 = clone(s), dl = t5.until.deadline;
-      if (dl.mode === 'date') { const d = fromIso(dl.date); d.setMonth(d.getMonth() + 1); dl.date = iso(d); } else dl.value += Math.round(P.perMonth);
-      out.push({ name: 'Срок на месяц позже', what: deadlineText(dl, u.period).replace(/ — .*$/, ''), s: t5 });
     } else if (s.scheme === 'until') {
       const u = s.until, w = u.words, P = PERIODS[u.period];
       const t1 = clone(s); bump(t1.until.attempts, { add: 1 });
@@ -1424,10 +1175,8 @@ const PASimple = (() => {
       return;
     }
     if (s.scheme === 'until' && (untilP(s.until) <= 0 || meanOf(untilAttempts(s.until).know, untilAttempts(s.until).v) <= 0)) {
-      const u = s.until, f = funnelOn(u) ? u.funnel : null;
+      const u = s.until;
       const why = meanOf(untilAttempts(u).know, untilAttempts(u).v) <= 0 ? `Если ${untilWords(u).many} нет совсем, результата не будет.`
-        : f && f.invite <= 0 ? 'Если на собеседования не зовут совсем, оффера не будет.'
-        : f && f.ok <= 0 ? 'Если ни один оффер не подходит, работу не найти.'
         : `Если ${u.words.one} никогда не удаётся, сколько ни пробуй — результата не будет.`;
       fail('Так не получится никогда', `<p>${why} Проверьте цифры: «почти никогда» лучше вписать как маленький процент, например 3 %.</p>`);
       return;
@@ -1468,7 +1217,6 @@ const PASimple = (() => {
       if (s.scheme === 'tries') last.pess = { kind: 'p', value: binomAtLeast(ps.tries.n, ps.tries.pct / 100, ps.tries.need) };
       else if (s.scheme === 'goal' && ps.goal.start !== ps.goal.target && meanStep(ps.goal) <= 0) last.pess = { kind: 'median', value: Infinity };
       else last.pess = metric(ps, (await runP(toScenario(ps), nFor(ps, N_IDEA), my)).summary);
-      if ((s.scheme === 'parts' || s.scheme === 'all') && s.cause.on) last.indep = (await runP(MC.independentVersion(sc), N_IDEA, my)).summary;
       }
       if (calc.variants.length === 2) {
         const o = calc.variants[1 - calc.active];
@@ -1510,16 +1258,12 @@ const PASimple = (() => {
     if (s.scheme === 'goal') return { yes: 'успеете', no: 'не успеете', q: `${s.title || 'Цель'}: успею ${dlShort(s.goal.deadline, s.goal.period)}?` };
     if (s.scheme === 'until') { const u = s.until; return { yes: u.words.act, no: `не ${u.words.act}`, q: `${s.title}: ${dlShort(u.deadline, u.period)}?` }; }
     if (s.scheme === 'tries') return { yes: s.tries.act || 'получится', no: `не ${s.tries.act || 'получится'}`, q: `${s.title || 'Попытки'}: хотя бы ${s.tries.need} из ${s.tries.n}?` };
-    const k = unitKind(s.unit);
-    if (s.scheme === 'all') return { yes: 'дождётесь', no: 'не дождётесь', inf: 'дождаться всех', q: `${s.title || 'Ситуация'}: всё будет готово за ${fmtVal(s.limit.value, s.unit)}?`, reserve: 'закладывайте' };
-    if (k === 'time') return { yes: 'успеете', no: 'не успеете', inf: 'успеть', q: `${s.title || 'Ситуация'}: успею за ${fmtVal(s.limit.value, s.unit)}?`, reserve: 'закладывайте' };
-    if (k === 'money') return { yes: 'хватит', no: 'не хватит', inf: 'хватило', q: `${s.title || 'Ситуация'}: хватит ${fmtVal(s.limit.value, s.unit)}?`, reserve: 'берите' };
-    return { yes: 'уложитесь', no: 'не уложитесь', inf: 'уложиться', q: `${s.title || 'Ситуация'}: уложусь в ${fmtVal(s.limit.value, s.unit)}?`, reserve: 'закладывайте' };
+    return { yes: 'да', no: 'нет', q: s.title || '' };
   }
-  function metricText(m, s) {
+    function metricText(m, s) {
     if (m.kind === 'p') return `${of100(m.value)} из 100`;
     if (m.kind === 'median') return m.value > PERIODS[s.goal.period].max ? 'не доходите даже за 10 лет' : fmtPeriods(m.value, s.goal.period);
-    if (m.kind === 'val') return `≈ ${fmtVal(m.value, unitOf(s, s.result))}`;
+    if (m.kind === 'val') return `≈ ${fmtEst(m.value, unitOf(s, s.result))}`;
     return fmtVal(m.value, s.unit);
   }
   function pessText(m, s) {
@@ -1552,9 +1296,8 @@ const PASimple = (() => {
       v.pct = Math.min(100, v.pct * 1.25);
       v.history = v.history.map(x => x * 1.25);
     };
-    if (t.items) t.items.forEach(it => { worse(it.v); if (it.vc) worse(it.vc); });
     if (t.goal) { bump(t.goal.step, { mul: 0.8 }); if (t.goal.setback.on) t.goal.setback.pct = Math.min(100, t.goal.setback.pct * 1.25); }
-    if (t.until) { bump(untilAttempts(t.until), { mul: 0.8 }); t.until.pct *= 0.8; if (funnelOn(t.until)) t.until.funnel.invite *= 0.8; }
+    if (t.until) { bump(untilAttempts(t.until), { mul: 0.8 }); t.until.pct *= 0.8; }
     if (t.tries) t.tries.pct *= 0.8;
     return t;
   }
@@ -1602,10 +1345,6 @@ const PASimple = (() => {
         ${st ? `<h3>Как получается итог</h3><ul>${st}</ul>` : ''}
         <p>Итог — «${esc(nameOf(s, s.result))}». ${s.success.on ? `Хорошо, если <b>${esc(successText(s))}</b>.` : 'Условия успеха нет — показано, каким бывает итог.'}</p>`;
     }
-    if (s.items) return `<table class="r-tab">${s.items.map((it, k) => row(esc(it.name || `Пункт ${k + 1}`), summaryOf(it.know, it.v, s.unit)
-      + (s.cause.on && it.byCause && it.vc ? `; когда «${esc(s.cause.name)}»: ${summaryOf(it.know, it.vc, s.unit)}` : ''))).join('')}</table>
-      ${s.cause.on ? `<p>Общая причина «${esc(s.cause.name)}» бывает в ${num(s.cause.pct)} % случаев.</p>` : ''}
-      <p>${s.scheme === 'all' ? 'Всё идёт одновременно, решает самое долгое.' : 'Части складываются.'}${s.limit.on ? ` Порог — ${fmtVal(s.limit.value, s.unit)}.` : ''}</p>`;
     if (s.goal) {
       const g = s.goal, P = PERIODS[g.period];
       return `<table class="r-tab">${row('Сейчас → цель', `${fmtVal(g.start, s.unit)} → ${fmtVal(g.target, s.unit)}`)}
@@ -1617,9 +1356,8 @@ const PASimple = (() => {
       const u = s.until, a = untilAttempts(u), P = PERIODS[u.period], w = untilWords(u);
       return `<table class="r-tab">${row('Срок', esc(deadlineText(u.deadline, u.period)))}
         ${row(`Сколько ${esc(w.many)} за ${P.acc}`, summaryOf(a.know, a.v, ''))}
-        ${funnelOn(u) ? row('Зовут на собеседование', `${num(u.funnel.invite)} %`) : ''}
         ${row(`${esc(u.words.one)} заканчивается ${esc(u.words.succIns || 'успехом')}`, `${num(u.pct)} %`)}
-        ${funnelOn(u) ? row('Оффер подходит', `${num(u.funnel.ok)} %`) : ''}</table>`;
+</table>`;
     }
     const t = s.tries;
     return `<table class="r-tab">${row('Попыток', fmtIn(t.n))}${row('Одна попытка удаётся', `${num(t.pct)} %`)}${row('Нужно удачных', `хотя бы ${fmtIn(t.need)}`)}</table>`;
@@ -1630,7 +1368,7 @@ const PASimple = (() => {
     const isGoal = s.scheme === 'goal', isUntil = s.scheme === 'until', isTries = s.scheme === 'tries', timeline = isGoal || isUntil;
     const period = isGoal ? s.goal.period : isUntil ? s.until.period : null, P = period ? PERIODS[period] : null;
     const isB = s.scheme === 'build', unit = isB ? unitOf(s, s.result) : s.unit;
-    const fv = x => (timeline ? fmtPeriods(x, period) : isTries ? `${Math.round(x)} из ${s.tries.n}` : fmtVal(x, unit));
+    const fv = x => (timeline ? fmtPeriods(x, period) : isTries ? `${Math.round(x)} из ${s.tries.n}` : fmtEst(x, unit));
     const notReached = timeline ? 1 - countLE(R.sorted, P.max) / R.sorted.length : 0;
     const nRuns = S.n.toLocaleString('ru-RU');
     const view = { title: s.title || 'Мой расчёт' };
@@ -1655,7 +1393,7 @@ const PASimple = (() => {
       </section>`;
       sticky(`<span class="st-main"><b>${of100(ev.p)} из 100</b> · ${word}</span><span class="st-go">ответ ↓</span>`, lvl);
     } else {
-      const label = isB ? `«${esc(nameOf(s, s.result))}» скорее всего` : isGoal ? 'Скорее всего дойдёте до цели за' : s.scheme === 'all' ? 'Скорее всего всё будет готово через' : 'Скорее всего выйдет';
+      const label = isB ? `«${esc(nameOf(s, s.result))}» скорее всего` : isGoal ? 'Скорее всего дойдёте до цели за' : 'Скорее всего выйдет';
       view.big = fv(R.pct[50]);
       view.sub = `В 8 случаях из 10 — от ${fv(R.pct[10])} до ${fv(R.pct[90])}.`;
       html += `<section class="card s-answer"><div class="s-ans-head"><div class="s-q">${esc(s.title || '')}</div>${pdfBtn}</div>
@@ -1668,7 +1406,7 @@ const PASimple = (() => {
 
     // ---- 2. сколько выходит (+ гистограмма)
     const lines = [];
-    let linesTitle = timeline ? 'Когда' : isTries ? 'Чего ждать' : 'Чего ждать и какой нужен запас';
+    let linesTitle = timeline ? 'Когда' : 'Чего ждать';
     if (isTries) {
       const t = s.tries, p = t.pct / 100;
       lines.push(`Скорее всего удачных будет ${Math.round(R.pct[50])} из ${t.n}.`);
@@ -1691,10 +1429,6 @@ const PASimple = (() => {
           const per = Math.ceil(need / Wp);
           lines.push(`Чтобы ${esc(u.words.inf || 'получилось')} ${deadlineText(u.deadline, period).replace(/ — .*$/, '')} в 9 случаях из 10, нужно около ${need} ${plural(need, [aw.one, aw.few, aw.many])} — примерно <b>${per} в ${P.acc}</b>.`);
         }
-        if (funnelOn(u)) {
-          const f = u.funnel, perApp = untilP(u);
-          lines.push(`Из 100 откликов в среднем: ${num(f.invite)} собеседований → ${num(f.invite * u.pct / 100)} офферов → ${num(perApp * 100)} подходящих. То есть примерно 1 подходящий оффер на ${Math.round(1 / perApp)} откликов.`);
-        }
       }
     } else if (isB) {
       const nmR = esc(nameOf(s, s.result)), c = s.success.cmp, thr = fmtVal(s.success.value, unit);
@@ -1707,18 +1441,9 @@ const PASimple = (() => {
       if (ev && s.success.ref === s.result && (c === '>=' || c === '>'))
         lines.push(ev.p < 0.9 ? `Чтобы условие выполнялось 9 раз из 10, порог пришлось бы опустить с ${thr} до <b>${fv(R.pct[10])}</b>.`
           : `Запас есть: даже 9 раз из 10 выходит не меньше ${fv(R.pct[10])} (порог — ${thr}).`);
-    } else {
-      if (ev) lines.push(`Скорее всего выйдет ${fmtVal(R.pct[50], s.unit)}.`);
-      lines.push(`Чтобы ${W.inf} в 9 случаях из 10 — ${W.reserve} <b>${fmtVal(R.pct[90], s.unit)}</b>.`);
-      lines.push(`Почти наверняка (99 из 100) — ${fmtVal(R.pct[99], s.unit)}.`);
-      if (s.scheme === 'parts') {
-        const plan = s.items.reduce((a, it) => a + (it.know === 'exact' ? it.v.exact : it.know === 'approx' ? it.v.usual
-          : it.know === 'maybe' ? (it.v.pct > 50 ? (it.v.from + it.v.to) / 2 : 0) : median(it.v.history)), 0);
-        lines.push(`Если всё пойдёт «как обычно», выйдет ${fmtVal(plan, s.unit)} — но так или лучше бывает только в ${of100(countLE(R.sorted, plan) / R.sorted.length)} случаях из 100.`);
-      }
     }
     // проверка на оптимизм: люди обычно недооценивают сроки и траты (ошибка планирования)
-    if (last.pess) lines.push(`<span class="opt">Проверка на оптимизм.</span> Люди обычно недооценивают задержки и траты. Если всё на четверть хуже, чем вы вписали, — ${pessText(last.pess, s)}${last.pess.kind === 'p' && ev ? ` вместо ${of100(ev.p)}` : ''}.`);
+    if (last.pess) lines.push(`<span class="opt">Проверка на оптимизм.</span> Люди обычно оценивают слишком оптимистично. Если всё на четверть хуже, чем вы вписали, — ${pessText(last.pess, s)}${last.pess.kind === 'p' && ev ? ` вместо ${of100(ev.p)}` : ''}.`);
     else if (!(isB && !ev)) lines.push('<span class="muted">Проверяю на оптимизм…</span>');
     view.linesTitle = linesTitle; view.lines = lines.filter(l => !/Проверяю на оптимизм/.test(l)).map(dot2);
     const hasHist = !isTries && !timeline;
@@ -1733,7 +1458,6 @@ const PASimple = (() => {
     if (timeline && notReached > 0.01) warn.push(`В ${of100(notReached)} случаях из 100 это не происходит даже за ${fmtPeriods(P.max, period)}. Похоже, темп слишком медленный.`);
     const few = [];
     const hist = (name, v, know) => { if (know === 'history' && v.history.length < 5) few.push(name); };
-    if (s.items) s.items.forEach((it, k) => hist(it.name || `Пункт ${k + 1}`, it.v, it.know));
     if (isB) s.factors.forEach((f, k) => hist(f.name || `Фактор ${k + 1}`, f.v, f.know));
     if (isGoal) hist('темп', s.goal.step.v, s.goal.step.know);
     if (isUntil) hist(untilWords(s.until).many, untilAttempts(s.until).v, untilAttempts(s.until).know);
@@ -1770,8 +1494,8 @@ const PASimple = (() => {
     view.indep = '';
     if (last.indep && ev) {
       const p2 = last.indep.event.p, d = Math.round((p2 - ev.p) * 100);
-      const cause = isB ? [...new Set(s.factors.filter(f => f.depOn).map(f => nameOf(s, f.depCause)))].join('», «') : s.cause.name;
-      view.indep = `Если считать ${isB ? 'факторы' : 'части'} по отдельности и забыть, что «${esc(cause)}» влияет сразу на несколько, получилось бы
+      const cause = [...new Set(s.factors.filter(f => f.depOn).map(f => nameOf(s, f.depCause)))].join('», «');
+      view.indep = `Если считать факторы по отдельности и забыть, что «${esc(cause)}» влияет сразу на несколько, получилось бы
         <b>${of100(p2)} из 100</b>${d ? ` — на ${Math.abs(d)} ${d > 0 ? 'больше' : 'меньше'}, чем на самом деле` : ', почти так же'}. Плохие случаи приходят вместе.`;
       html += `<section class="card"><h3>Почему важна общая причина</h3><p>${view.indep}</p></section>`;
     }
@@ -1789,7 +1513,7 @@ const PASimple = (() => {
           verdictTxt = !big ? 'Варианты почти одинаковые.' : `Лучше вариант <b>${diff > 0 ? me : o.label}</b>.`;
         }
         const p90 = (sx, Sx) => (sx.scheme === 'goal' ? fmtPeriods(Sx.result.pct[90], sx.goal.period) : sx.scheme === 'until' ? fmtPeriods(Sx.result.pct[90], sx.until.period)
-          : sx.scheme === 'tries' ? '—' : fmtVal(Sx.result.pct[90], sx.scheme === 'build' ? unitOf(sx, sx.result) : sx.unit));
+          : sx.scheme === 'tries' ? '—' : fmtEst(Sx.result.pct[90], sx.scheme === 'build' ? unitOf(sx, sx.result) : sx.unit));
         view.compare = `<div class="table-wrap"><table class="cmp"><thead><tr><th></th><th>Вариант ${me} (сейчас)</th><th>Вариант ${o.label}</th></tr></thead><tbody>
           <tr><td>${mm.kind === 'p' ? `Шанс, что ${esc(W.sub)}` : mm.kind === 'median' || mm.kind === 'val' ? 'Скорее всего' : 'В плохом случае (1 из 10)'}</td><td>${metricText(mm, s)}</td><td>${metricText(mo, o.s)}</td></tr>
           ${!isTries ? `<tr><td>${isB ? '9 из 10 не больше' : 'Запас на 9 из 10'}</td><td>${p90(s, S)}</td><td>${p90(o.s, o.summary)}</td></tr>` : ''}
@@ -1904,12 +1628,10 @@ const PASimple = (() => {
     if (h.startsWith('#s=')) fromLink = tryStore(() => JSON.parse(unb64(h.slice(3))), null);
     const exId = (/^#simple=(\w+)$/.exec(h) || [])[1];
     const cId = (/^#c=(\w+)$/.exec(h) || [])[1], cEx = cId && EXAMPLES_B.find(e => e.id === cId);
-    const qm = /^#q=(.+)$/.exec(h);
     const saved = tryStore(() => JSON.parse(localStorage.getItem(KEY_CUR)), null);
     if (fromLink && Array.isArray(fromLink.variants)) calc = { ...calcOf(fromLink.variants[0]), variants: fromLink.variants.map(upgrade), active: fromLink.active || 0 };
     else if (cEx) calc = calcOf(cEx.make());
     else if (exId && exId !== 'new' && example(exId)) calc = calcOf(example(exId));
-    else if (qm) { calc = calcOf({ scheme: null }); const s = detect(decodeURIComponent(qm[1])); if (s) calc.variants[0] = s; }
     else if (exId === 'new') calc = calcOf({ scheme: null });
     else if (saved && Array.isArray(saved.variants)) { calc = saved; calc.variants.forEach(upgrade); }
     else calc = calcOf(meetingB(false));   // первый заход: сразу пример из задания
@@ -1922,7 +1644,7 @@ const PASimple = (() => {
   }
 
   return {
-    init, toScenario, check, detect, EXAMPLES_B, buildToScenario, parseDeadline, EXAMPLES, TOPICS, fmtVal, fmtPeriods, binomAtLeast, triesFor, shareLink,
+    init, toScenario, check, EXAMPLES_B, EXAMPLES_S, buildToScenario, legacyToBuild, fmtVal, fmtEst, fmtPeriods, binomAtLeast, triesFor, shareLink,
     load(simple) { calc = calcOf(simple && simple.scheme ? upgrade(simple) : { scheme: null }); open.clear(); render(); changed(); },
     get calc() { return calc; }, get last() { return last; },
   };

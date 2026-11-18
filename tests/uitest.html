@@ -41,6 +41,7 @@ async function until(fn, ms = 20000) {
   try { w2.localStorage.clear(); } catch (e) {}
   check('Стартовый экран: «Конструктор вероятностей», «Начать с нуля», 6 примеров, 3 особых расчёта',
     !!q('[data-s-act="blank-b"]') && qa('[data-s-act="example-b"]').length === 6 && qa('.scheme').length === 3 &&
+    qa('[data-s-act="example-s"]').length === 6 &&
     /Конструктор вероятностей/.test(q('#s-editor').textContent) && !q('#s-q'));
   await goSimple('');
   await ready();
@@ -124,6 +125,8 @@ async function until(fn, ms = 20000) {
   // 19а. своя формула: прежний расчёт переходит в формулу, переименование правит формулу
   pick(q('[data-s="steps.0.op"]'), 'formula');
   check('«Своя формула»: подставилась прежняя сумма', q('[data-s="steps.0.formula"]').value === 'Сборы + Фактор_2', q('[data-s="steps.0.formula"]').value);
+  check('«Примеры формул» — с именами из этого расчёта', !!q('.f-help') && /max\(Сборы; Фактор_2\)/.test(q('.f-help').textContent) &&
+    /если\(Сборы > 15; Фактор_2; 0\)/.test(q('.f-help').textContent), q('.f-help') && q('.f-help').textContent.replace(/\s+/g, ' ').slice(0, 120));
   inp(q('[data-s="factors.1.name"]'), 'Пробка');
   check('Переименовали «Фактор 2» → «Пробка»: формула поправилась сама', q('[data-s="steps.0.formula"]').value === 'Сборы + Пробка', q('[data-s="steps.0.formula"]').value);
   inp(q('[data-s="steps.0.formula"]'), 'Сборы + Пробка + Кот');
@@ -176,13 +179,50 @@ async function until(fn, ms = 20000) {
   q('[data-s="success.on"]').click();
   await until(() => /«Всего» скорее всего/.test(resText()) && !/из 100/.test(big()), 30000);
   check('Без галочки успеха: «Всего» скорее всего ≈ … ₽, советов «что поможет» нет', /\d ₽/.test(big()) && !/Что поможет/.test(resText()), big());
+  check('Оценки без ложной точности: «62 200 ₽», а не «62 175 ₽»', /^\d{2}\s\d00 ₽$/.test(big()), big());
 
-  // 25. пример «самолёт»: часы и минуты, «как обычно» бывает редко, сильнее всего — пробка
+  // 24б. «по данным» из CSV: файл из Excel, выбор столбца; файл .xlsx — понятный отказ
+  q('[data-s-act="to-start"]').click();
+  q('[data-s-act="blank-b"]').click();
+  await until(() => big(), 30000);
+  q('[data-s-act="know"][data-p="factors.0"][data-know="history"]').click();
+  check('«По данным»: есть кнопка «📂 Загрузить из файла»', !!q('[data-s-act="csv"][data-p="factors.0.v"]'));
+  const xhr = new XMLHttpRequest();
+  xhr.open('GET', encodeURI('../данные/статистика_совещаний.csv'), false); xhr.send();
+  const giveFile = (text, name) => {
+    q('[data-s-act="csv"][data-p="factors.0.v"]').click();
+    const dt = new w2.DataTransfer(); dt.items.add(new w2.File([text], name, { type: 'text/csv' }));
+    const fi = q('#s-csv-file'); fi.files = dt.files; fi.dispatchEvent(new w2.Event('change'));
+  };
+  giveFile(xhr.responseText, 'статистика_совещаний.csv');
+  await until(() => q('.csv-pick'), 10000);
+  const cols = qa('[data-s-act="csv-col"]').map(b => b.textContent.replace(/\s+/g, ' ').trim());
+  check('CSV: 3 столбца с числами на выбор (дата и «дождь да/нет» не предлагаются)', cols.length === 3 &&
+    /Автобус_мин \(60\)/.test(cols[0]) && /Обед_затянулся_мин/.test(cols[1]) && /Переговорка/.test(cols[2]), cols.join(' | '));
+  qa('[data-s-act="csv-col"]')[1].click();
+  await until(() => /^\d+ из 100/.test(big()), 30000);
+  check('CSV: взят столбец «Обед», 60 значений, сообщение и ответ', w2.eval('PASimple').calc.variants[0].factors[0].v.history.length === 60 &&
+    /Загружено 60 значений из «статистика_совещаний\.csv», столбец «Обед_затянулся_мин»/.test(q('#s-editor').textContent) &&
+    /60 знач\./.test(q('[data-hist="factors.0.v"]').textContent), (q('.csv-msg') || {}).textContent);
+  giveFile('x', 'отчёт.xlsx');
+  await until(() => /Это файл Excel/.test(q('#s-editor').textContent), 5000);
+  check('Файл .xlsx: «Сохраните его в Excel как CSV»', /Сохраните его в Excel как «CSV/.test(q('#s-editor').textContent));
+
+  // 24в. старые сохранённые расчёты «из частей» открываются в конструкторе
+  w2.eval('PASimple').load({ v: 3, scheme: 'parts', title: 'Старый расчёт', unit: 'мин', limit: { on: true, value: 35 },
+    cause: { on: false, name: 'Дождь', pct: 30 }, items: [
+      { name: 'Сборы', know: 'exact', v: { exact: 30 }, byCause: false, vc: null },
+      { name: 'Пробка', know: 'maybe', v: { pct: 50, from: 10, to: 10, history: [] }, byCause: false, vc: null }] });
+  await until(() => /^50 из 100/.test(big()), 30000);
+  check('Старый расчёт «из частей» → конструктор: 2 фактора, «Всего» = сумма, ≤ 35 мин → 50 из 100',
+    qa('.s-item:not(.step)').length === 2 && q('[data-s="steps.0.op"]').value === 'sum' && /^50 из 100/.test(big()), big());
+
+  // 25. пример «самолёт» (старая ссылка #simple=plane открывает его в конструкторе): часы и минуты, сильнее всего — пробка
   await goSimple('#simple=plane'); await ready();
   check('Самолёт: ≈ 92 из 100, «Почти наверняка»', /^9[123] из 100/.test(big()) && /Почти наверняка/.test(q('.s-answer').textContent), big());
-  check('Самолёт: запас «1 ч 5x мин», «как обычно» — только в нескольких случаях из 100',
-    /закладывайте 1 ч \d+ мин/.test(resText()) && /так или лучше бывает только в \d+ случаях из 100/.test(resText()));
-  check('Самолёт: сильнее всего поможет «Пробка — такого не случается»', /Пробка/.test(q('.idea').textContent), q('.idea').textContent.replace(/\s+/g, ' '));
+  check('Самолёт: «Запас есть: даже 9 раз из 10 выходит не больше 1 ч … мин»', /Запас есть: даже 9 раз из 10 выходит не больше 1 ч \d+ мин/.test(resText()),
+    (resText().match(/Запас есть[^.]*\./) || [''])[0]);
+  check('Самолёт: сильнее всего поможет «Если «Пробка» никогда не случается»', /Если «Пробка» никогда не случается/.test(q('.idea').textContent), q('.idea').textContent.replace(/\s+/g, ' '));
 
   // 26. «иду к цели»: жим (вверх), похудение (вниз), здравый смысл
   await goSimple('#simple=bench'); await ready();
@@ -193,7 +233,7 @@ async function until(fn, ms = 20000) {
     +qa('#s-cum .hit').pop().getAttribute('data-tip').match(/(\d+) из 100$/)[1] >= +qa('#s-cum .hit')[0].getAttribute('data-tip').match(/(\d+) из 100$/)[1],
     qa('#s-cum .hit').slice(0, 2).map(r => r.getAttribute('data-tip')).join(' | '));
   await until(() => /Проверка на оптимизм\. .*на четверть хуже/.test(resText()), 30000);
-  check('Проверка на оптимизм в ответе', /Проверка на оптимизм\. Люди обычно недооценивают задержки и траты\. Если всё на четверть хуже, чем вы вписали, — \d+ из 100/.test(resText()),
+  check('Проверка на оптимизм в ответе', /Проверка на оптимизм\. Люди обычно оценивают слишком оптимистично\. Если всё на четверть хуже, чем вы вписали, — \d+ из 100/.test(resText()),
     (resText().match(/Проверка на оптимизм[^.]*\./) || [''])[0]);
   q('[data-s-act="ten"][data-p="goal.setback.pct"][data-n="10"]').click();
   await until(() => q('.s-fix'), 10000);
@@ -207,6 +247,13 @@ async function until(fn, ms = 20000) {
   check('Собеседования: 73 из 100 (точно 1 − 0,85⁸ = 72,75 %)', Math.abs(exactP - 0.7275) < 1e-4 && /^73 из 100/.test(big()), big());
   check('Собеседования: «нужно примерно 15 попыток» для 9 из 10', /нужно примерно 15 попыток/.test(resText()));
   check('Шанс 15 %: подпись «1,5 из 10»', /1,5 из 10/.test(q('.ten-txt').textContent), q('.ten-txt').textContent);
+
+  // 28. пример особого расчёта кнопкой: «Найти работу до Нового года»
+  q('#s-new').click();
+  q('[data-s-act="example-s"][data-id="job"]').click();
+  await ready();
+  check('Пример «Найти работу»: вопросы про собеседования, ответ «N из 100 … найдёте работу»',
+    /Сколько собеседований бывает за неделю/.test(q('#s-editor').textContent) && / из 100/.test(big()) && /найдёте работу/.test(resText()), big());
 
   // 29. «Новая ситуация» — снова выбор схемы
   q('#s-new').click();

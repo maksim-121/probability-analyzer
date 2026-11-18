@@ -1,5 +1,5 @@
 /*
- * Разбор CSV для фактора «Из данных».
+ * Разбор CSV для фактора «по данным» и безопасные имена для формул (safeName).
  * Понимает файлы русского Excel: разделитель «;», дробная часть через запятую (2,5), BOM в начале.
  * Также: разделитель «,» или табуляция, кавычки "…" (внутри "" = кавычка), строка заголовков (если есть).
  *
@@ -67,9 +67,6 @@ const CSV = (() => {
     return { delimiter: d, hasHeader, rows: body.length, columns };
   }
 
-  // ---------------------------------------------------------------- «строки целиком»
-  const YES = new Set(['да', 'yes', 'true', 'истина', 'д', 'y']);
-  const NO = new Set(['нет', 'no', 'false', 'ложь', 'н', 'n']);
   const NAME_START = /[A-Za-zА-Яа-яЁё_]/;
   const RESERVED = new Set(['и', 'или', 'не', 'and', 'or', 'not', 'да', 'нет', 'true', 'false', 'max', 'min', 'макс',
     'мин', 'abs', 'модуль', 'round', 'округл', 'floor', 'вниз', 'ceil', 'вверх', 'sqrt', 'корень', 'if', 'если']);
@@ -85,51 +82,5 @@ const CSV = (() => {
     return out;
   }
 
-  /**
-   * Таблица целиком, для фактора «Строки таблицы».
-   * Берём столбцы, где все непустые ячейки — числа или «да / нет» (-> 1 / 0); остальные (дата, текст) отбрасываем.
-   * Строки, где в нужном столбце пусто, пропускаем (иначе строка «развалится»).
-   * -> { columns: [имена для формул], rows: [[числа]], dropped: [исходные имена], skipped, renamed: [[было, стало]] }
-   */
-  function toRows(text) {
-    const lines = String(text).replace(/^﻿/, '').split(/\r\n|\n|\r/).filter(l => l.trim() !== '');
-    const empty = { columns: [], rows: [], dropped: [], skipped: 0, renamed: [] };
-    if (!lines.length) return empty;
-    const d = detectDelimiter(lines[0]);
-    const table = lines.map(l => (d ? splitLine(l, d) : [l]));
-    const width = Math.max(...table.map(r => r.length));
-    const hasHeader = table[0].some(c => {
-      const t = c.trim().toLowerCase();
-      return t !== '' && Number.isNaN(cellNumber(c)) && !YES.has(t) && !NO.has(t);
-    });
-    const body = hasHeader ? table.slice(1) : table;
-    const conv = [];   // для каждого столбца: функция ячейка -> число | null (пусто) | NaN (не подходит)
-    const keep = [], names = [], dropped = [], renamed = [], taken = new Set();
-    for (let k = 0; k < width; k++) {
-      const raw = (hasHeader && (table[0][k] || '').trim()) || `Столбец ${k + 1}`;
-      const cells = body.map(r => (r[k] === undefined ? '' : r[k]));
-      const filled = cells.filter(c => c.trim() !== '');
-      const isNum = filled.length && filled.every(c => !Number.isNaN(cellNumber(c)));
-      const isBool = filled.length && filled.every(c => YES.has(c.trim().toLowerCase()) || NO.has(c.trim().toLowerCase()));
-      if (!isNum && !isBool) { dropped.push(raw); continue; }
-      const name = safeName(raw, taken);
-      if (name !== raw) renamed.push([raw, name]);
-      keep.push(k);
-      names.push(name);
-      conv[k] = isNum ? c => cellNumber(c) : c => {
-        const t = c.trim().toLowerCase();
-        return t === '' ? null : YES.has(t) ? 1 : 0;
-      };
-    }
-    const rows = [];
-    let skipped = 0;
-    for (const r of body) {
-      const vals = keep.map(k => conv[k](r[k] === undefined ? '' : r[k]));
-      if (vals.some(v => v === null)) skipped++;
-      else rows.push(vals);
-    }
-    return { columns: names, rows, dropped, skipped, renamed };
-  }
-
-  return { parse, cellNumber, toRows, safeName };
+  return { parse, cellNumber, safeName };
 })();
